@@ -10,14 +10,7 @@ export default function ImageSidebar({ images, onAddToCanvas, onDelete, collapse
 
     return (
         <>
-            {/* Toggle button — always visible */}
-            <button
-                className="sidebar-toggle"
-                onClick={onToggle}
-                title={collapsed ? 'Show images' : 'Hide images'}
-            >
-                {collapsed ? '🖼️' : '◀'}
-            </button>
+            {/* Toggle button moved below the sidebar so that '.sidebar-open ~ .sidebar-toggle' works */}
 
             {/* Sidebar panel */}
             <div className={`image-sidebar ${collapsed ? 'sidebar-collapsed' : 'sidebar-open'}`}>
@@ -67,6 +60,15 @@ export default function ImageSidebar({ images, onAddToCanvas, onDelete, collapse
                     </div>
                 )}
             </div>
+
+            {/* Toggle button — always visible */}
+            <button
+                className="sidebar-toggle"
+                onClick={onToggle}
+                title={collapsed ? 'Show images' : 'Hide images'}
+            >
+                {collapsed ? '🖼️' : '◀'}
+            </button>
         </>
     );
 }
