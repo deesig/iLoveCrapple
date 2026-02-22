@@ -1216,7 +1216,7 @@ body {
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.12em;
-  color: #fff;
+  color: #000000;
   display: block;
   margin-bottom: 12px;
 }
@@ -1296,8 +1296,8 @@ body {
 
 .prof-edit-btn {
   background: transparent;
-  color: #fff;
-  border: 2px solid #fff;
+  color: #000000;
+  border: 2px solid #000000;
   border-radius: 20px;
   padding: 8px 24px;
   font-size: 0.9rem;
@@ -1320,8 +1320,8 @@ body {
 }
 
 .prof-edit-active:hover {
-  background: #2302b6;
-  color: #fff;
+  background: #fff;
+  color: #2302b6;
 }
 
 .prof-username {
@@ -1464,7 +1464,7 @@ body {
   font-size: 0.85rem;
   font-weight: 700;
   letter-spacing: 0.1em;
-  color: #fff;
+  color: #000000;
   cursor: pointer;
   font-family: var(--font-sans);
   transition: all 0.2s;
