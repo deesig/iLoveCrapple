@@ -5,7 +5,12 @@ import { useAuth } from './AuthContext';
 import ImageSidebar from './ImageSidebar';
 
 // ── Toolbar constants ──────────────────────────────────────────────────────────
-const FONTS = ['Courier New', 'Arial', 'Georgia', 'Times New Roman', 'Verdana', 'Helvetica'];
+const FONTS = [
+  'Courier New', 'Arial', 'Georgia', 'Times New Roman', 'Verdana', 'Helvetica',
+  'Atma', 'Averia Serif Libre', 'DM Sans', 'DM Serif Text', 'Google Sans',
+  'IBM Plex Serif', 'Instrument Serif', 'Manrope', 'Newsreader', 'Oswald',
+  'Outfit', 'Public Sans', 'Roboto Flex', 'Sour Gummy', 'Story Script', 'Vollkorn'
+];
 const FONT_SIZES = [10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 64];
 
 // ── Shared toolbar button style ───────────────────────────────────────────────
@@ -67,8 +72,10 @@ const DigitalJournal = () => {
   const [saveStatus, setSaveStatus] = useState('');
   const saveTimerRef = useRef(null);
   const [userImages, setUserImages] = useState([]);
+  const [sessionAudios, setSessionAudios] = useState([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const fileInputRef = useRef(null);
+  const audioInputRef = useRef(null);
   const [contextMenu, setContextMenu] = useState(null); // { x, y, target }
   const [fmt, setFmt] = useState({
     fontFamily: 'Courier New',
@@ -80,9 +87,14 @@ const DigitalJournal = () => {
     textAlign: 'left',
   });
 
-  // Grid Configuration
+  // Page & Grid Configuration
+  // 11" × 8.5" landscape at 96 PPI (Google Docs letter size)
+  const PAGE_W = 8.5 * 180;   // 1056px
+  const PAGE_H = 11 * 180; // 816px
+  const PAGE_MARGIN = 40; // px margin around page
   const GRID_SIZE = 30;
   const DOT_SIZE = 1.5;
+  const pageRef = useRef(null); // reference to the page background rect
 
   // ── initDimensions override helper — applied to every textbox ──────────
   // Extracts the initDimensions override into a reusable function so it can
@@ -112,7 +124,28 @@ const DigitalJournal = () => {
     setSaveStatus('Saving...');
     saveTimerRef.current = setTimeout(async () => {
       try {
-        const json = canvas.toJSON(['splitByGrapheme', '_lockedWidth']);
+        const json = canvas.toJSON();
+
+        // Fabric v7 doesn't reliably pass custom properties down through canvas.toJSON().
+        // We manually serialize and attach the necessary metadata here.
+        const objects = canvas.getObjects().map(obj => {
+          let o = obj.toJSON ? obj.toJSON() : obj.toObject();
+
+          if (obj._isPageBg) o._isPageBg = true;
+          if (obj._isAudio) {
+            o._isAudio = true;
+            o.audioId = obj.audioId;
+            o._overlayId = obj._overlayId;
+          }
+          if (obj.splitByGrapheme !== undefined) o.splitByGrapheme = obj.splitByGrapheme;
+          if (obj._lockedWidth !== undefined) o._lockedWidth = obj._lockedWidth;
+
+          return o;
+        });
+
+        // Filter out the page background rect from saved data to prevent loading duplicate patterns
+        json.objects = objects.filter(o => !o._isPageBg);
+
         await fetch('/api/canvas', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -129,22 +162,102 @@ const DigitalJournal = () => {
   }, []);
 
   // ── Load saved canvas ─────────────────────────────────────────────────────
-  const loadCanvas = useCallback(async (canvas) => {
+  const loadCanvas = useCallback(async (canvas, activePageObj) => {
     try {
       const res = await fetch('/api/canvas', { credentials: 'include' });
       if (!res.ok) return;
       const { canvasJSON } = await res.json();
+
+      if (canvas.__isDisposed) return;
+
       if (!canvasJSON || !canvasJSON.objects?.length) return;
 
-      await canvas.loadFromJSON(canvasJSON);
+      // Clean up old duplicated pages and migrate element coordinates safely
+      let oldPageLeft = null;
+      let oldPageTop = null;
+      canvasJSON.objects = canvasJSON.objects.filter((o) => {
+        const isPageRect = o._isPageBg || (
+          o.type && o.type.toLowerCase() === 'rect' &&
+          !o._isAudio &&
+          !o.selectable && !o.evented
+        );
+        if (isPageRect) {
+          if (oldPageLeft === null) {
+            oldPageLeft = o.left;
+            oldPageTop = o.top;
+          }
+          return false;
+        }
+        return true;
+      });
 
-      // Re-apply our custom overrides to every loaded textbox
-      canvas.getObjects().forEach((obj) => {
+      if (oldPageLeft !== null && oldPageLeft !== PAGE_MARGIN) {
+        const dx = PAGE_MARGIN - oldPageLeft;
+        const dy = PAGE_MARGIN - (oldPageTop ?? PAGE_MARGIN);
+        canvasJSON.objects.forEach((o) => {
+          if (o.left !== undefined) o.left += dx;
+          if (o.top !== undefined) o.top += dy;
+        });
+      }
+
+      if (canvas.__isDisposed) return;
+
+      try {
+        await canvas.loadFromJSON(canvasJSON);
+      } catch (loadErr) {
+        // Fabric may throw if canvas was disposed mid-load (React Strict Mode)
+        console.warn('loadFromJSON failed (likely disposed canvas):', loadErr.message);
+        return;
+      }
+
+      if (canvas.__isDisposed) return;
+
+      // Ensure parsed is an object to prevent indexing errors
+      const parsed = typeof canvasJSON === 'string' ? JSON.parse(canvasJSON) : canvasJSON;
+
+      // Re-apply our custom overrides and manually restore dropped properties
+      const loadedAudios = [];
+      canvas.getObjects().forEach((obj, i) => {
+        const sourceData = parsed.objects[i];
+
+        if (sourceData && sourceData._isAudio) {
+          obj._isAudio = true;
+          obj.audioId = sourceData.audioId;
+          obj._overlayId = sourceData._overlayId;
+        }
+
         if (obj.type === 'textbox') {
           applyTextboxOverrides(obj);
+        } else if (obj._isAudio && obj.audioId) {
+          loadedAudios.push(obj);
         }
       });
 
+      // Fetch base64 audio data for all loaded audio players
+      if (loadedAudios.length > 0) {
+        Promise.all(
+          loadedAudios.map(async (obj) => {
+            try {
+              const r = await fetch(`/api/audio/${obj.audioId}`, { credentials: 'include' });
+              if (!r.ok) return null;
+              const data = await r.json();
+              return { overlayId: obj._overlayId, url: data.audioData };
+            } catch (e) {
+              return null;
+            }
+          })
+        ).then(results => {
+          const valid = results.filter(r => r !== null);
+          setSessionAudios(prev => [...prev, ...valid]);
+        });
+      }
+
+      // Restore page rect (loadFromJSON replaces all objects)
+      if (activePageObj) {
+        canvas.add(activePageObj);
+        canvas.sendObjectToBack(activePageObj);
+      }
+      canvas.set('backgroundColor', '#e8e8e8');
       canvas.requestRenderAll();
     } catch (err) {
       console.error('Load failed:', err);
@@ -169,33 +282,75 @@ const DigitalJournal = () => {
 
   // ── Canvas initialisation ────────────────────────────────────────────────
   useEffect(() => {
+    const canvasH = PAGE_H + PAGE_MARGIN * 2;
+    const canvasW = PAGE_W - PAGE_MARGIN * 14;
     const canvas = new fabric.Canvas(canvasRef.current, {
-      height: window.innerHeight,
-      width: window.innerWidth,
+      height: canvasH,
+      width: canvasW,
       selection: true,
       fireRightClick: true,
       stopContextMenu: true,
+      backgroundColor: '#e8e8e8',
     });
 
-    // Dotted background
-    const patternSourceCanvas = document.createElement('canvas');
-    patternSourceCanvas.width = GRID_SIZE;
-    patternSourceCanvas.height = GRID_SIZE;
-    const ctx = patternSourceCanvas.getContext('2d');
-    ctx.fillStyle = '#cccccc';
-    ctx.beginPath();
-    ctx.arc(GRID_SIZE / 2, GRID_SIZE / 2, DOT_SIZE, 0, 2 * Math.PI);
-    ctx.fill();
-    canvas.set('backgroundColor', new fabric.Pattern({ source: patternSourceCanvas, repeat: 'repeat' }));
-    canvas.requestRenderAll();
+    // ── Page background rect (non-interactive, always at back) ──────────
+    const pageLeft = PAGE_MARGIN;
+    const pageTop = PAGE_MARGIN;
+
+    // Create a dot-pattern tile for the page fill
+    const dotTile = document.createElement('canvas');
+    dotTile.width = GRID_SIZE;
+    dotTile.height = GRID_SIZE;
+    const dCtx = dotTile.getContext('2d');
+    dCtx.fillStyle = '#fffff5';
+    dCtx.fillRect(0, 0, GRID_SIZE, GRID_SIZE);
+    dCtx.fillStyle = '#cccccc';
+    dCtx.beginPath();
+    dCtx.arc(GRID_SIZE / 2, GRID_SIZE / 2, DOT_SIZE, 0, Math.PI * 2);
+    dCtx.fill();
+
+    const page = new fabric.Rect({
+      left: pageLeft,
+      top: pageTop,
+      width: PAGE_W,
+      height: PAGE_H,
+      fill: new fabric.Pattern({ source: dotTile, repeat: 'repeat' }),
+      selectable: false,
+      evented: false,
+      hasControls: false,
+      hoverCursor: 'default',
+      shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.15)', blur: 12, offsetX: 2, offsetY: 4 }),
+      _isPageBg: true,
+    });
+    canvas.add(page);
+    canvas.sendObjectToBack(page);
+    pageRef.current = page;
 
     // Snap to grid
     canvas.on('object:moving', ({ target }) => {
+      if (target._isPageBg) return;
       target.set({
         left: Math.round(target.left / GRID_SIZE) * GRID_SIZE,
         top: Math.round(target.top / GRID_SIZE) * GRID_SIZE,
       });
     });
+
+    // Sync HTML audio overlays on every render to exactly match Fabric object boundaries
+    const syncAudioOverlays = () => {
+      canvas.getObjects().forEach(o => {
+        if (o._isAudio) {
+          const el = document.getElementById(`audio-container-${o._overlayId}`);
+          if (el) {
+            const rect = o.getBoundingRect();
+            el.style.left = `${rect.left}px`;
+            el.style.top = `${rect.top}px`;
+            el.style.width = `${rect.width}px`;
+            el.style.height = `${rect.height}px`;
+          }
+        }
+      });
+    };
+    canvas.on('after:render', syncAudioOverlays);
 
     // ── Textbox resize: bake scaleX into width, anchor top ──────────────
     canvas.on('before:transform', (options) => {
@@ -248,24 +403,57 @@ const DigitalJournal = () => {
     canvas.on('object:removed', triggerSave);
 
     // Load saved canvas data
-    loadCanvas(canvas);
+    loadCanvas(canvas, page);
 
     setFabricCanvas(canvas);
-    return () => canvas.dispose();
+    return () => {
+      canvas.__isDisposed = true;
+      canvas.dispose();
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Delete key handler ───────────────────────────────────────────────────
+  // ── Keyboard handler (Delete & Arrow keys) ──────────────────────────────
   useEffect(() => {
     if (!fabricCanvas) return;
     const handleKeyDown = (e) => {
-      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
-      const active = fabricCanvas.getActiveObject();
-      if (active?.isEditing) return;
-      const objs = fabricCanvas.getActiveObjects();
-      if (!objs.length) return;
-      fabricCanvas.remove(...objs);
-      fabricCanvas.discardActiveObject();
-      fabricCanvas.requestRenderAll();
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      const activeObj = fabricCanvas.getActiveObject();
+      if (!activeObj || activeObj.isEditing) return;
+
+      // Handle Deletion
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const objs = fabricCanvas.getActiveObjects();
+        if (objs.length) {
+          objs.forEach(o => {
+            if (o._isPageBg) return;
+            fabricCanvas.remove(o);
+            if (o._isAudio) {
+              setSessionAudios(prev => prev.filter(a => a.overlayId !== o._overlayId));
+            }
+          });
+          fabricCanvas.discardActiveObject();
+          fabricCanvas.requestRenderAll();
+        }
+        return;
+      }
+
+      // Handle Arrow Grid Snapping
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault(); // prevent scrolling
+        const step = GRID_SIZE;
+
+        // Move the active object (which could be a single item or an ActiveSelection group)
+        if (e.key === 'ArrowUp') activeObj.top -= step;
+        if (e.key === 'ArrowDown') activeObj.top += step;
+        if (e.key === 'ArrowLeft') activeObj.left -= step;
+        if (e.key === 'ArrowRight') activeObj.left += step;
+
+        activeObj.setCoords();
+        fabricCanvas.requestRenderAll();
+        // Fire modified event to trigger the auto-save hook
+        fabricCanvas.fire('object:modified', { target: activeObj });
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -374,13 +562,26 @@ const DigitalJournal = () => {
   };
 
   // ── Add text box ─────────────────────────────────────────────────────────
-  const addTextBox = () => {
+  const addTextBox = useCallback((eOrX, optY) => {
     if (!fabricCanvas) return;
+
+    let left, top;
+    // Handle if called with coordinates vs click event
+    if (typeof eOrX === 'number' && typeof optY === 'number') {
+      left = eOrX;
+      top = optY;
+    } else {
+      // Place inside the page area
+      const page = pageRef.current;
+      left = page ? page.left + 100 : 200;
+      top = page ? page.top + 30 : 100;
+    }
+
     const text = new fabric.Textbox('Type here...', {
-      left: Math.round(200 / GRID_SIZE) * GRID_SIZE,
-      top: Math.round(100 / GRID_SIZE) * GRID_SIZE,
+      left: Math.round(left / GRID_SIZE) * GRID_SIZE,
+      top: Math.round(top / GRID_SIZE) * GRID_SIZE,
       width: 240,
-      fontFamily: 'Courier New',
+      fontFamily: 'Outfit',
       fontSize: 20,
       fill: '#333',
       lineHeight: 1.3,
@@ -391,7 +592,66 @@ const DigitalJournal = () => {
     applyTextboxOverrides(text);
     fabricCanvas.add(text);
     fabricCanvas.setActiveObject(text);
-  };
+  }, [fabricCanvas, applyTextboxOverrides]);
+
+  // ── Add Audio ────────────────────────────────────────────────────────────
+  const addAudioToCanvas = useCallback((audioId, dataUrl, x, y) => {
+    if (!fabricCanvas) return;
+    const page = pageRef.current;
+    const pLeft = page ? page.left + 100 : 200;
+    const pTop = page ? page.top + 30 : 100;
+
+    const overlayId = Date.now().toString() + Math.random().toString(36).substr(2, 5);
+
+    const rect = new fabric.Rect({
+      left: x ?? Math.round(pLeft / GRID_SIZE) * GRID_SIZE,
+      top: y ?? Math.round(pTop / GRID_SIZE) * GRID_SIZE,
+      width: 300,
+      height: 54, // standard HTML audio height
+      fill: 'transparent',
+      stroke: 'rgba(0,0,0,0)',
+      rx: 10,
+      ry: 10,
+    });
+
+    rect._isAudio = true;
+    rect.audioId = audioId;
+    rect._overlayId = overlayId;
+    rect.setControlsVisibility({
+      mt: false, mb: false, ml: true, mr: true,
+      tl: false, tr: false, bl: false, br: false
+    });
+
+    fabricCanvas.add(rect);
+    fabricCanvas.setActiveObject(rect);
+    fabricCanvas.requestRenderAll();
+
+    setSessionAudios(prev => [...prev, { overlayId, url: dataUrl }]);
+  }, [fabricCanvas]);
+
+  const handleUploadAudio = useCallback((e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const dataUrl = ev.target.result;
+      try {
+        const res = await fetch('/api/audio', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ audioData: dataUrl, filename: file.name, mimeType: file.type }),
+        });
+        if (!res.ok) throw new Error('Audio upload failed');
+        const data = await res.json();
+        addAudioToCanvas(data.id, dataUrl);
+      } catch (err) {
+        console.error('Audio upload error:', err);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }, [addAudioToCanvas]);
 
   // ── Image helpers ────────────────────────────────────────────────────────
   const generateThumbnail = useCallback((dataUrl, maxSize = 150) => {
@@ -528,15 +788,18 @@ const DigitalJournal = () => {
 
   // ── Drag-and-drop from sidebar ─────────────────────────────────────────
   const handleDragOver = useCallback((e) => {
-    if (e.dataTransfer.types.includes('application/x-poentry-image')) {
+    if (e.dataTransfer.types.includes('application/x-poentry-image') ||
+      e.dataTransfer.types.includes('application/x-poentry-text')) {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
     }
   }, []);
 
   const handleDrop = useCallback(async (e) => {
+    const isText = e.dataTransfer.getData('application/x-poentry-text');
     const imageId = e.dataTransfer.getData('application/x-poentry-image');
-    if (!imageId) return;
+
+    if (!imageId && !isText) return;
     e.preventDefault();
 
     // Calculate canvas-relative position
@@ -544,6 +807,11 @@ const DigitalJournal = () => {
     const rect = canvasEl.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
+
+    if (isText) {
+      addTextBox(x, y);
+      return;
+    }
 
     try {
       const res = await fetch(`/api/images/${imageId}`, { credentials: 'include' });
@@ -553,7 +821,7 @@ const DigitalJournal = () => {
     } catch (err) {
       console.error('Drop image error:', err);
     }
-  }, [addImageToCanvas]);
+  }, [addImageToCanvas, addTextBox]);
 
   // ── Right-click context menu ───────────────────────────────────────────
   useEffect(() => {
@@ -612,7 +880,7 @@ const DigitalJournal = () => {
 
   return (
     <div
-      style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', backgroundColor: '#fffff5' }}
+      style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', backgroundColor: '#e8e8e8', display: 'flex', flexDirection: 'column' }}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
@@ -629,13 +897,13 @@ const DigitalJournal = () => {
 
       {/* ── Top toolbar strip ── */}
       {/* onMouseDown: prevent focus from leaving the canvas when clicking buttons.
-          Skipped for <select> so native dropdowns still open; those are handled
-          by the lastSelRef restore path in applyStyle instead. */}
+          Skipped for <select> and draggable elements so native behaviors still work. */}
       <div
-        onMouseDown={(e) => { if (e.target.tagName !== 'SELECT') e.preventDefault(); }}
+        onMouseDown={(e) => {
+          if (e.target.tagName !== 'SELECT' && !e.target.draggable) e.preventDefault();
+        }}
         style={{
-          position: 'absolute',
-          top: 0, left: 0, right: 0,
+          position: 'relative',
           zIndex: 10,
           background: 'white',
           borderBottom: '1px solid #ddd',
@@ -644,20 +912,29 @@ const DigitalJournal = () => {
           alignItems: 'center',
           gap: '6px',
           flexWrap: 'wrap',
+          flexShrink: 0,
         }}
       >
 
         {/* Add Text button — always visible */}
-        <button onClick={addTextBox} style={{
-          cursor: 'pointer',
-          padding: '5px 12px',
-          background: '#333',
-          color: 'white',
-          border: 'none',
-          borderRadius: '4px',
-          fontSize: '13px',
-          fontWeight: 'bold',
-        }}>
+        <button
+          onClick={addTextBox}
+          draggable
+          onDragStart={(e) => {
+            e.dataTransfer.setData('application/x-poentry-text', 'true');
+            e.dataTransfer.effectAllowed = 'copy';
+          }}
+          title="Click to add or drag to canvas"
+          style={{
+            cursor: 'grab',
+            padding: '5px 12px',
+            background: '#333',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            fontSize: '13px',
+            fontWeight: 'bold',
+          }}>
           + Add Text
         </button>
 
@@ -680,6 +957,27 @@ const DigitalJournal = () => {
           accept="image/jpeg,image/png"
           style={{ display: 'none' }}
           onChange={handleUploadImage}
+        />
+
+        {/* Upload Audio button — always visible */}
+        <button onClick={() => audioInputRef.current?.click()} style={{
+          cursor: 'pointer',
+          padding: '5px 12px',
+          background: '#7c6aef',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          fontSize: '13px',
+          fontWeight: 'bold',
+        }}>
+          🎵 Add Audio
+        </button>
+        <input
+          ref={audioInputRef}
+          type="file"
+          accept="audio/mp3,audio/mpeg,audio/wav"
+          style={{ display: 'none' }}
+          onChange={handleUploadAudio}
         />
 
         {/* Formatting controls — only when a textbox is selected */}
@@ -748,8 +1046,46 @@ const DigitalJournal = () => {
         </>}
       </div>
 
-      {/* The Journal Canvas */}
-      <canvas ref={canvasRef} style={{ marginTop: '44px' }} />
+      {/* The Journal Canvas — scrollable area below sticky toolbar */}
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        <div style={{
+          minWidth: `${Math.max(window.screen ? window.screen.availWidth : 1440, 1336)}px`,
+          minHeight: '100%',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'flex-start',
+          paddingTop: '40px',
+          paddingBottom: '40px',
+          paddingLeft: sidebarCollapsed ? '36px' : '200px',
+          transition: 'padding-left 0.2s ease'
+        }}>
+          <div style={{ position: 'relative' }}>
+            <canvas ref={canvasRef} />
+
+            {/* ── Native HTML overlays for interactive objects like audio ── */}
+            {sessionAudios.map(a => (
+              <div
+                key={a.overlayId}
+                id={`audio-container-${a.overlayId}`}
+                style={{
+                  position: 'absolute',
+                  zIndex: 5,
+                  pointerEvents: 'auto',
+                  // Initial values, overridden live by syncAudioOverlays
+                  left: -9999, top: -9999,
+                }}
+              >
+                <audio
+                  controls
+                  src={a.url}
+                  style={{ width: '100%', height: '100%', outline: 'none' }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
 
       {/* Image Sidebar */}
       <ImageSidebar

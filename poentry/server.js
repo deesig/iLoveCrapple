@@ -42,6 +42,15 @@ db.exec(`
     mime_type  TEXT DEFAULT 'image/png',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  CREATE TABLE IF NOT EXISTS user_audio (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL REFERENCES users(id),
+    audio_data TEXT NOT NULL,
+    filename   TEXT DEFAULT 'audio.mp3',
+    mime_type  TEXT DEFAULT 'audio/mpeg',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // ── Prepared statements ────────────────────────────────────────────────────────
@@ -71,6 +80,16 @@ const stmts = {
     ),
     getImageById: db.prepare('SELECT * FROM user_images WHERE id = ? AND user_id = ?'),
     deleteImage: db.prepare('DELETE FROM user_images WHERE id = ? AND user_id = ?'),
+
+    // Audio statements
+    insertAudio: db.prepare(
+        'INSERT INTO user_audio (user_id, audio_data, filename, mime_type) VALUES (?, ?, ?, ?)'
+    ),
+    getUserAudioFiles: db.prepare(
+        'SELECT id, filename, mime_type, created_at FROM user_audio WHERE user_id = ? ORDER BY created_at DESC'
+    ),
+    getAudioById: db.prepare('SELECT * FROM user_audio WHERE id = ? AND user_id = ?'),
+    deleteAudio: db.prepare('DELETE FROM user_audio WHERE id = ? AND user_id = ?'),
 };
 
 // ── Express app ────────────────────────────────────────────────────────────────
@@ -248,6 +267,46 @@ app.get('/api/images/:id', requireAuth, (req, res) => {
 app.delete('/api/images/:id', requireAuth, (req, res) => {
     const result = stmts.deleteImage.run(req.params.id, req.session.userId);
     if (result.changes === 0) return res.status(404).json({ error: 'Image not found' });
+    res.json({ ok: true });
+});
+
+// ── Audio ──────────────────────────────────────────────────────────────────────
+app.post('/api/audio', requireAuth, (req, res) => {
+    const { audioData, filename, mimeType } = req.body;
+    if (!audioData) return res.status(400).json({ error: 'Missing audioData' });
+
+    try {
+        const info = stmts.insertAudio.run(
+            req.session.userId,
+            audioData,
+            filename || 'audio.mp3',
+            mimeType || 'audio/mpeg'
+        );
+        res.json({
+            id: info.lastInsertRowid,
+            filename: filename || 'audio.mp3',
+            mimeType: mimeType || 'audio/mpeg',
+        });
+    } catch (err) {
+        console.error('Audio upload error:', err);
+        res.status(500).json({ error: 'Failed to save audio' });
+    }
+});
+
+app.get('/api/audio', requireAuth, (req, res) => {
+    const audioFiles = stmts.getUserAudioFiles.all(req.session.userId);
+    res.json({ audioFiles });
+});
+
+app.get('/api/audio/:id', requireAuth, (req, res) => {
+    const audio = stmts.getAudioById.get(req.params.id, req.session.userId);
+    if (!audio) return res.status(404).json({ error: 'Audio not found' });
+    res.json({ audioData: audio.audio_data, mimeType: audio.mime_type });
+});
+
+app.delete('/api/audio/:id', requireAuth, (req, res) => {
+    const result = stmts.deleteAudio.run(req.params.id, req.session.userId);
+    if (result.changes === 0) return res.status(404).json({ error: 'Audio not found' });
     res.json({ ok: true });
 });
 
