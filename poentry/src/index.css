@@ -10,7 +10,7 @@
 }
 
 :root {
-  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans: 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --color-bg: #0f0f1a;
   --color-surface: rgba(255, 255, 255, 0.06);
   --color-surface-hover: rgba(255, 255, 255, 0.1);
@@ -30,6 +30,7 @@
 
 body {
   font-family: var(--font-sans);
+  font-optical-sizing: auto;
   background: var(--color-bg);
   color: var(--color-text);
   min-height: 100vh;
@@ -39,6 +40,13 @@ body {
   justify-content: center;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Typography Utilities ────────────────────────────────────────────────── */
+.outfit-font {
+  font-family: "Outfit", sans-serif;
+  font-optical-sizing: auto;
+  font-style: normal;
 }
 
 #root {
