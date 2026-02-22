@@ -567,8 +567,9 @@ body {
 
 /* ── Discovery Page ─────────────────────────────────────────────────────── */
 .discovery-page {
+  position: relative;
   min-height: 100vh;
-  background: #f5f0eb;
+  background: #EEEEEE;
   font-family: var(--font-sans);
   color: #2a2a2a;
   position: relative;
@@ -579,21 +580,31 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 40px;
-  border-bottom: 1px solid #ddd;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(10px);
+  padding: 16px 120px;
+  background: #EEEEEE;
   position: sticky;
   top: 0;
   z-index: 50;
 }
 
-.disc-logo {
-  font-family: 'Instrument Serif', 'DM Serif Text', Georgia, serif;
-  font-size: 2rem;
-  font-weight: 400;
-  color: #1a1a2e;
-  letter-spacing: -0.02em;
+.disc-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 60px;
+  right: 60px;
+  height: 2px;
+  background: #00000025;
+}
+
+.disc-header .main-logo {
+  position: relative;
+  top: 7%;
+  left: 7%;
+  transform: translate(0%, -0%);
+
+  width: 120px;
+  height: auto;
 }
 
 .disc-header-actions {
@@ -603,20 +614,21 @@ body {
 }
 
 .disc-new-entry-btn {
-  background: #1a237e;
+  background: #0223B6;
   color: #fff;
   border: none;
-  border-radius: 24px;
+  border-radius: 15px;
   padding: 10px 24px;
   font-size: 0.9rem;
   font-weight: 600;
-  font-family: var(--font-sans);
+  font-family: 'Averia Serif Libre', serif;
+  letter-spacing: 0.8px;
   cursor: pointer;
   transition: background 0.2s, transform 0.1s;
 }
 
 .disc-new-entry-btn:hover {
-  background: #283593;
+  background: #2C8BFF;
   transform: translateY(-1px);
 }
 
@@ -625,9 +637,12 @@ body {
   align-items: center;
   gap: 8px;
   padding: 6px 16px;
-  border: 1px solid #ccc;
-  border-radius: 24px;
+  font-family: 'Averia Serif Libre', serif;
+  letter-spacing: 0.8px;
+  border: 2px solid #0223B6;
+  border-radius: 15px;
   background: #fff;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
 }
 
 .disc-avatar {
@@ -646,8 +661,8 @@ body {
 .disc-icon-btn {
   width: 36px;
   height: 36px;
-  border: 1px solid #ccc;
-  border-radius: 50%;
+  border: 2px solid #0223B6;
+  border-radius: 15px;
   background: #fff;
   font-size: 1rem;
   cursor: pointer;
@@ -655,6 +670,7 @@ body {
   align-items: center;
   justify-content: center;
   transition: background 0.15s;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
 }
 
 .disc-icon-btn:hover {
@@ -666,12 +682,14 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 40px;
+  padding: 20px 160px;
 }
 
 .disc-controls-left {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
+  
   gap: 16px;
 }
 
@@ -688,28 +706,31 @@ body {
 }
 
 .disc-pill {
-  padding: 8px 20px;
+  padding: 7px 40px;
   border: 2px solid #e8642b;
   background: transparent;
   color: #e8642b;
   font-size: 0.85rem;
   font-weight: 600;
-  font-family: var(--font-sans);
+  font-family: 'Averia Serif Libre', serif;
+  letter-spacing: 0.8px;
   cursor: pointer;
   transition: all 0.2s;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
 }
 
 .disc-pill:first-child {
-  border-radius: 20px 0 0 20px;
+  border-radius: 15px 0 0 15px;
 }
 
 .disc-pill:last-child {
-  border-radius: 0 20px 20px 0;
+  border-radius: 0 15px 15px 0;
 }
 
 .disc-pill-active {
   background: #e8642b;
   color: #fff;
+  
 }
 
 .disc-search-wrapper {
@@ -718,13 +739,14 @@ body {
 
 .disc-search-input {
   padding: 8px 40px 8px 16px;
-  border: 2px solid #ddd;
-  border-radius: 8px;
+  border: 2px solid #e8642b;
+  border-radius: 15px;
   font-size: 0.85rem;
   font-family: var(--font-sans);
   background: #fff;
   width: 200px;
   transition: border-color 0.2s;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
 }
 
 .disc-search-input:focus {
@@ -824,7 +846,12 @@ body {
 .disc-author {
   font-size: 0.95rem;
   font-weight: 700;
-  color: #1a1a2e;
+  color: #0223B6;
+}
+
+.disc-author:hover {
+  color: #2C8BFF;
+  transform: translateY(-1px);
 }
 
 .disc-description {
@@ -842,7 +869,7 @@ body {
 }
 
 .disc-read-btn {
-  background: #e8642b;
+  background: #0223B6;
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -852,10 +879,11 @@ body {
   font-family: var(--font-sans);
   cursor: pointer;
   transition: background 0.2s, transform 0.1s;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
 }
 
 .disc-read-btn:hover {
-  background: #d45520;
+  background: #2C8BFF;
   transform: translateY(-1px);
 }
 
@@ -865,26 +893,52 @@ body {
 }
 
 .disc-social-btn {
-  width: 42px;
-  height: 42px;
-  border: 2px solid #ddd;
-  border-radius: 50%;
-  background: transparent;
-  font-size: 1.1rem;
-  cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
+  gap: 6px;
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 99px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
 }
 
+/* Hover */
 .disc-social-btn:hover {
-  border-color: #e8642b;
-  background: rgba(232, 100, 43, 0.06);
+  border-radius: 99px;
+  border: 2px solid #2C8BFF;
+}
+
+/* Active (mouse held down) */
+.disc-social-btn:active {
+  border-radius: 99px;
+  border: 1px solid #EEE;
+  background: #2302B6;
+}
+
+/* Clicked/toggled on — for liked and bookmarked states */
+.disc-social-btn.disc-liked,
+.disc-social-btn.disc-bookmarked {
+  border-radius: 99px;
+  border: 2px solid #2302B6;
+  background: #EEE;
+}
+
+.disc-social-svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Change SVG fill when button is in active/clicked state */
+.disc-social-btn:active .disc-social-svg,
+.disc-social-btn.disc-liked .disc-social-svg,
+.disc-social-btn.disc-bookmarked .disc-social-svg {
+  filter: brightness(0) invert(1);
 }
 
 .disc-liked {
-  border-color: #e63946;
+  border-color: #0223B6;
   background: rgba(230, 57, 70, 0.08);
 }
 
@@ -1012,7 +1066,7 @@ body {
   background: transparent;
   border: none;
   font-size: 1.8rem;
-  color: #e8642b;
+  color: #0223B6;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1026,7 +1080,7 @@ body {
 }
 
 .disc-nav-btn:disabled {
-  color: #ccc;
+  color: #b7aaf4;
   cursor: default;
 }
 
@@ -1061,4 +1115,26 @@ body {
 .disc-empty-state p {
   color: #777;
   font-size: 0.95rem;
+}
+
+.left-cutoff {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  scale: 90%;;
+  transform: translateY(-50%);
+  width: 120px;
+  height: 621px;
+  z-index: 0;
+}
+
+.right-cutoff {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  scale: 90%;;
+  transform: translateY(-50%);
+  width: 120px;
+  height: 621px;
+  z-index: 0;
 }

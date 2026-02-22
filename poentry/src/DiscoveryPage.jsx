@@ -2,6 +2,12 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import bookPageSvg from './assets/bookPage.svg';
+import poentryLogo from './assets/iconography/poentrylogo.svg';
+import like from './assets/iconography/SVG/like.svg';
+import save from './assets/iconography/SVG/save.svg';
+import share from './assets/iconography/SVG/share.svg';
+import leftBookCutoff from './assets/iconography/leftBookCutoff.png';
+import rightBookCutoff from './assets/iconography/rightBookCutoff.png';
 
 // ── Sticky-note colour palette ────────────────────────────────────────────────
 const NOTE_COLORS = ['#d4f59f', '#f5d49f', '#9fd4f5', '#f59fd4', '#d49ff5', '#f5f59f'];
@@ -131,10 +137,13 @@ export default function DiscoveryPage() {
 
     // ── Render ──────────────────────────────────────────────────────────────────
     return (
+        
         <div className="discovery-page">
+            <img src={leftBookCutoff} alt="" className="left-cutoff" />
+            <img src={rightBookCutoff} alt="" className="right-cutoff" />
             {/* ── Header ─────────────────────────────────────────────────────────── */}
             <header className="disc-header">
-                <h1 className="disc-logo">Poentry</h1>
+                <img src={poentryLogo} alt="Poentry Logo" className="main-logo" />
                 <div className="disc-header-actions">
                     <button className="disc-new-entry-btn" onClick={() => navigate('/journal')}>
                         + New Entry
@@ -182,6 +191,7 @@ export default function DiscoveryPage() {
             </div>
 
             {/* ── Main Content ───────────────────────────────────────────────────── */}
+            
             {loading ? (
                 <div className="disc-empty-state">
                     <div className="spinner" style={{ borderTopColor: '#e8642b' }} />
@@ -236,17 +246,18 @@ export default function DiscoveryPage() {
                                         onClick={toggleLike}
                                         title="Like"
                                     >
-                                        {displayEntry.liked ? '❤️' : '🤍'} {displayEntry.likeCount || ''}
+                                        <img src={like} alt="Like" className="disc-social-svg" />
+                                        {displayEntry.likeCount || ''}
                                     </button>
                                     <button
                                         className={`disc-social-btn ${displayEntry.bookmarked ? 'disc-bookmarked' : ''}`}
                                         onClick={toggleBookmark}
                                         title="Bookmark"
                                     >
-                                        {displayEntry.bookmarked ? '🔖' : '📑'}
+                                        <img src={save} alt="Save" className="disc-social-svg" />
                                     </button>
                                     <button className="disc-social-btn" onClick={handleShare} title="Share">
-                                        🔗
+                                        <img src={share} alt="Share" className="disc-social-svg" />
                                     </button>
                                 </div>
                             </div>
