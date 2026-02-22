@@ -77,6 +77,11 @@ const DigitalJournal = () => {
   const fileInputRef = useRef(null);
   const audioInputRef = useRef(null);
   const [contextMenu, setContextMenu] = useState(null); // { x, y, target }
+  const [publishModal, setPublishModal] = useState(false);
+  const [publishTitle, setPublishTitle] = useState('');
+  const [publishDesc, setPublishDesc] = useState('');
+  const [publishVis, setPublishVis] = useState('public');
+  const [publishing, setPublishing] = useState(false);
   const [fmt, setFmt] = useState({
     fontFamily: 'Courier New',
     fontSize: 20,
@@ -980,6 +985,21 @@ const DigitalJournal = () => {
           onChange={handleUploadAudio}
         />
 
+        {/* Publish button */}
+        <button onClick={() => setPublishModal(true)} style={{
+          cursor: 'pointer',
+          padding: '5px 14px',
+          background: '#e8642b',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          fontSize: '13px',
+          fontWeight: 'bold',
+          marginLeft: '4px',
+        }}>
+          📤 Publish
+        </button>
+
         {/* Formatting controls — only when a textbox is selected */}
         {toolbarVisible && <>
           <div style={divider} />
@@ -1107,6 +1127,138 @@ const DigitalJournal = () => {
           <button onClick={() => handleZOrder('forward')}>Bring Forward</button>
           <button onClick={() => handleZOrder('backward')}>Send Backward</button>
           <button onClick={() => handleZOrder('back')}>Send to Back</button>
+        </div>
+      )}
+
+      {/* ── Publish Modal ─────────────────────────────────────────────────── */}
+      {publishModal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 2000,
+          background: 'rgba(0,0,0,0.45)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center',
+        }} onClick={() => setPublishModal(false)}>
+          <div style={{
+            background: '#fff', borderRadius: '16px', padding: '32px',
+            width: '420px', maxWidth: '90vw', boxShadow: '0 8px 40px rgba(0,0,0,0.3)',
+          }} onClick={e => e.stopPropagation()}>
+            <h2 style={{ fontFamily: 'DM Serif Text, serif', fontSize: '1.6rem', marginBottom: '20px', color: '#1a1a2e' }}>
+              Publish Your Entry
+            </h2>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#555', marginBottom: '6px' }}>Title</label>
+            <input
+              type="text"
+              value={publishTitle}
+              onChange={e => setPublishTitle(e.target.value)}
+              placeholder="My first scrapbook"
+              style={{
+                width: '100%', padding: '10px 14px', borderRadius: '8px',
+                border: '1px solid #ddd', fontSize: '0.95rem', marginBottom: '16px',
+                fontFamily: 'var(--font-sans)',
+              }}
+            />
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#555', marginBottom: '6px' }}>Description</label>
+            <textarea
+              value={publishDesc}
+              onChange={e => setPublishDesc(e.target.value)}
+              placeholder="A brief description of your entry..."
+              rows={3}
+              style={{
+                width: '100%', padding: '10px 14px', borderRadius: '8px',
+                border: '1px solid #ddd', fontSize: '0.9rem', marginBottom: '16px',
+                fontFamily: 'var(--font-sans)', resize: 'vertical',
+              }}
+            />
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#555', marginBottom: '6px' }}>Visibility</label>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+              <button
+                onClick={() => setPublishVis('public')}
+                style={{
+                  flex: 1, padding: '8px', borderRadius: '8px', cursor: 'pointer',
+                  border: publishVis === 'public' ? '2px solid #e8642b' : '1px solid #ddd',
+                  background: publishVis === 'public' ? '#fff5f0' : '#fff',
+                  fontWeight: 600, fontSize: '0.85rem',
+                  fontFamily: 'var(--font-sans)',
+                }}
+              >
+                🌐 Public
+              </button>
+              <button
+                onClick={() => setPublishVis('friends')}
+                style={{
+                  flex: 1, padding: '8px', borderRadius: '8px', cursor: 'pointer',
+                  border: publishVis === 'friends' ? '2px solid #7c6aef' : '1px solid #ddd',
+                  background: publishVis === 'friends' ? '#f5f0ff' : '#fff',
+                  fontWeight: 600, fontSize: '0.85rem',
+                  fontFamily: 'var(--font-sans)',
+                }}
+              >
+                👥 Friends
+              </button>
+            </div>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => setPublishModal(false)}
+                style={{
+                  flex: 1, padding: '12px', borderRadius: '8px', cursor: 'pointer',
+                  border: '1px solid #ddd', background: '#f5f5f5',
+                  fontWeight: 600, fontSize: '0.9rem',
+                  fontFamily: 'var(--font-sans)',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!fabricCanvas || publishing) return;
+                  setPublishing(true);
+                  try {
+                    // Generate thumbnail from the canvas
+                    const lowerCanvas = fabricCanvas.lowerCanvasEl || fabricCanvas.getElement();
+                    const thumbnail = lowerCanvas.toDataURL('image/png');
+                    // Get the canvas JSON
+                    const objects = fabricCanvas.getObjects().map(obj => {
+                      let o = obj.toJSON ? obj.toJSON() : obj.toObject();
+                      if (obj._isPageBg) o._isPageBg = true;
+                      if (obj._isAudio) { o._isAudio = true; o.audioId = obj.audioId; o._overlayId = obj._overlayId; }
+                      return o;
+                    });
+                    const canvasJSON = { version: fabricCanvas.version, objects };
+                    await fetch('/api/entries/publish', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      credentials: 'include',
+                      body: JSON.stringify({
+                        title: publishTitle || 'Untitled',
+                        description: publishDesc,
+                        thumbnail,
+                        canvasJSON,
+                        visibility: publishVis,
+                      }),
+                    });
+                    setPublishModal(false);
+                    setPublishTitle('');
+                    setPublishDesc('');
+                    navigate('/discover');
+                  } catch (err) {
+                    console.error('Publish failed:', err);
+                    alert('Failed to publish. Please try again.');
+                  } finally {
+                    setPublishing(false);
+                  }
+                }}
+                disabled={publishing}
+                style={{
+                  flex: 1, padding: '12px', borderRadius: '8px', cursor: 'pointer',
+                  border: 'none', background: '#e8642b', color: '#fff',
+                  fontWeight: 700, fontSize: '0.9rem',
+                  fontFamily: 'var(--font-sans)',
+                  opacity: publishing ? 0.6 : 1,
+                }}
+              >
+                {publishing ? 'Publishing...' : '📤 Publish'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

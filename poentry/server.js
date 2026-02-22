@@ -51,6 +51,43 @@ db.exec(`
     mime_type  TEXT DEFAULT 'audio/mpeg',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  CREATE TABLE IF NOT EXISTS published_entries (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES users(id),
+    title       TEXT NOT NULL DEFAULT 'Untitled',
+    description TEXT DEFAULT '',
+    thumbnail   TEXT,
+    canvas_json TEXT NOT NULL,
+    visibility  TEXT DEFAULT 'public',
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS entry_comments (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    entry_id   INTEGER NOT NULL REFERENCES published_entries(id) ON DELETE CASCADE,
+    user_id    INTEGER NOT NULL REFERENCES users(id),
+    content    TEXT NOT NULL,
+    color      TEXT DEFAULT '#d4f59f',
+    pos_x      REAL DEFAULT 0,
+    pos_y      REAL DEFAULT 0,
+    rotation   REAL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS entry_likes (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    entry_id INTEGER NOT NULL REFERENCES published_entries(id) ON DELETE CASCADE,
+    user_id  INTEGER NOT NULL REFERENCES users(id),
+    UNIQUE(entry_id, user_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS entry_bookmarks (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    entry_id INTEGER NOT NULL REFERENCES published_entries(id) ON DELETE CASCADE,
+    user_id  INTEGER NOT NULL REFERENCES users(id),
+    UNIQUE(entry_id, user_id)
+  );
 `);
 
 // ── Prepared statements ────────────────────────────────────────────────────────
@@ -90,6 +127,45 @@ const stmts = {
     ),
     getAudioById: db.prepare('SELECT * FROM user_audio WHERE id = ? AND user_id = ?'),
     deleteAudio: db.prepare('DELETE FROM user_audio WHERE id = ? AND user_id = ?'),
+
+    // Published entries statements
+    insertEntry: db.prepare(
+        'INSERT INTO published_entries (user_id, title, description, thumbnail, canvas_json, visibility) VALUES (?, ?, ?, ?, ?, ?)'
+    ),
+    getPublicEntries: db.prepare(`
+        SELECT pe.*, u.username, u.display_name, u.avatar_url,
+               (SELECT COUNT(*) FROM entry_likes WHERE entry_id = pe.id) AS like_count,
+               (SELECT COUNT(*) FROM entry_comments WHERE entry_id = pe.id) AS comment_count
+        FROM published_entries pe
+        JOIN users u ON pe.user_id = u.id
+        WHERE pe.visibility = 'public'
+        ORDER BY pe.created_at DESC
+        LIMIT ? OFFSET ?
+    `),
+    getEntryById: db.prepare(`
+        SELECT pe.*, u.username, u.display_name, u.avatar_url,
+               (SELECT COUNT(*) FROM entry_likes WHERE entry_id = pe.id) AS like_count,
+               (SELECT COUNT(*) FROM entry_comments WHERE entry_id = pe.id) AS comment_count
+        FROM published_entries pe
+        JOIN users u ON pe.user_id = u.id
+        WHERE pe.id = ?
+    `),
+    getEntryComments: db.prepare(`
+        SELECT ec.*, u.username, u.display_name, u.avatar_url
+        FROM entry_comments ec
+        JOIN users u ON ec.user_id = u.id
+        WHERE ec.entry_id = ?
+        ORDER BY ec.created_at ASC
+    `),
+    insertComment: db.prepare(
+        'INSERT INTO entry_comments (entry_id, user_id, content, color, pos_x, pos_y, rotation) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ),
+    findLike: db.prepare('SELECT id FROM entry_likes WHERE entry_id = ? AND user_id = ?'),
+    insertLike: db.prepare('INSERT INTO entry_likes (entry_id, user_id) VALUES (?, ?)'),
+    deleteLike: db.prepare('DELETE FROM entry_likes WHERE entry_id = ? AND user_id = ?'),
+    findBookmark: db.prepare('SELECT id FROM entry_bookmarks WHERE entry_id = ? AND user_id = ?'),
+    insertBookmark: db.prepare('INSERT INTO entry_bookmarks (entry_id, user_id) VALUES (?, ?)'),
+    deleteBookmark: db.prepare('DELETE FROM entry_bookmarks WHERE entry_id = ? AND user_id = ?'),
 };
 
 // ── Express app ────────────────────────────────────────────────────────────────
@@ -308,6 +384,165 @@ app.delete('/api/audio/:id', requireAuth, (req, res) => {
     const result = stmts.deleteAudio.run(req.params.id, req.session.userId);
     if (result.changes === 0) return res.status(404).json({ error: 'Audio not found' });
     res.json({ ok: true });
+});
+
+// ── Published Entries (Discovery) ─────────────────────────────────────────────
+app.post('/api/entries/publish', requireAuth, (req, res) => {
+    const { title, description, thumbnail, canvasJSON, visibility } = req.body;
+    if (!canvasJSON) return res.status(400).json({ error: 'Missing canvasJSON' });
+
+    try {
+        const info = stmts.insertEntry.run(
+            req.session.userId,
+            title || 'Untitled',
+            description || '',
+            thumbnail || null,
+            typeof canvasJSON === 'string' ? canvasJSON : JSON.stringify(canvasJSON),
+            visibility || 'public'
+        );
+        res.json({ id: info.lastInsertRowid, ok: true });
+    } catch (err) {
+        console.error('Publish error:', err);
+        res.status(500).json({ error: 'Failed to publish entry' });
+    }
+});
+
+app.get('/api/entries', requireAuth, (req, res) => {
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = parseInt(req.query.offset) || 0;
+
+    try {
+        const entries = stmts.getPublicEntries.all(limit, offset);
+        // Check like/bookmark status for the current user
+        const enriched = entries.map(e => ({
+            id: e.id,
+            userId: e.user_id,
+            title: e.title,
+            description: e.description,
+            thumbnail: e.thumbnail,
+            visibility: e.visibility,
+            createdAt: e.created_at,
+            username: e.username,
+            displayName: e.display_name,
+            avatarUrl: e.avatar_url,
+            likeCount: e.like_count,
+            commentCount: e.comment_count,
+            liked: !!stmts.findLike.get(e.id, req.session.userId),
+            bookmarked: !!stmts.findBookmark.get(e.id, req.session.userId),
+        }));
+        res.json({ entries: enriched });
+    } catch (err) {
+        console.error('List entries error:', err);
+        res.status(500).json({ error: 'Failed to list entries' });
+    }
+});
+
+app.get('/api/entries/:id', requireAuth, (req, res) => {
+    const entry = stmts.getEntryById.get(req.params.id);
+    if (!entry) return res.status(404).json({ error: 'Entry not found' });
+
+    res.json({
+        id: entry.id,
+        userId: entry.user_id,
+        title: entry.title,
+        description: entry.description,
+        thumbnail: entry.thumbnail,
+        canvasJSON: entry.canvas_json,
+        visibility: entry.visibility,
+        createdAt: entry.created_at,
+        username: entry.username,
+        displayName: entry.display_name,
+        avatarUrl: entry.avatar_url,
+        likeCount: entry.like_count,
+        commentCount: entry.comment_count,
+        liked: !!stmts.findLike.get(entry.id, req.session.userId),
+        bookmarked: !!stmts.findBookmark.get(entry.id, req.session.userId),
+    });
+});
+
+app.get('/api/entries/:id/comments', requireAuth, (req, res) => {
+    const comments = stmts.getEntryComments.all(req.params.id);
+    res.json({
+        comments: comments.map(c => ({
+            id: c.id,
+            content: c.content,
+            color: c.color,
+            posX: c.pos_x,
+            posY: c.pos_y,
+            rotation: c.rotation,
+            createdAt: c.created_at,
+            username: c.username,
+            displayName: c.display_name,
+            avatarUrl: c.avatar_url,
+        })),
+    });
+});
+
+app.post('/api/entries/:id/comments', requireAuth, (req, res) => {
+    const { content, color, posX, posY, rotation } = req.body;
+    if (!content) return res.status(400).json({ error: 'Missing content' });
+
+    const COLORS = ['#d4f59f', '#f5d49f', '#9fd4f5', '#f59fd4', '#d49ff5', '#f5f59f'];
+    const noteColor = color || COLORS[Math.floor(Math.random() * COLORS.length)];
+    const noteRotation = rotation ?? (Math.random() * 12 - 6); // -6° to +6°
+    const noteX = posX ?? (Math.random() * 300);
+    const noteY = posY ?? (Math.random() * 150);
+
+    try {
+        const info = stmts.insertComment.run(
+            req.params.id,
+            req.session.userId,
+            content,
+            noteColor,
+            noteX,
+            noteY,
+            noteRotation
+        );
+        const user = stmts.findUserById.get(req.session.userId);
+        res.json({
+            id: info.lastInsertRowid,
+            content,
+            color: noteColor,
+            posX: noteX,
+            posY: noteY,
+            rotation: noteRotation,
+            username: user.username,
+            displayName: user.display_name,
+        });
+    } catch (err) {
+        console.error('Comment error:', err);
+        res.status(500).json({ error: 'Failed to add comment' });
+    }
+});
+
+app.post('/api/entries/:id/like', requireAuth, (req, res) => {
+    const existing = stmts.findLike.get(req.params.id, req.session.userId);
+    if (existing) {
+        stmts.deleteLike.run(req.params.id, req.session.userId);
+        res.json({ liked: false });
+    } else {
+        try {
+            stmts.insertLike.run(req.params.id, req.session.userId);
+            res.json({ liked: true });
+        } catch (err) {
+            res.json({ liked: false });
+        }
+    }
+});
+
+app.post('/api/entries/:id/bookmark', requireAuth, (req, res) => {
+    const existing = stmts.findBookmark.get(req.params.id, req.session.userId);
+    if (existing) {
+        stmts.deleteBookmark.run(req.params.id, req.session.userId);
+        res.json({ bookmarked: false });
+    } else {
+        try {
+            stmts.insertBookmark.run(req.params.id, req.session.userId);
+            res.json({ bookmarked: true });
+        } catch (err) {
+            res.json({ bookmarked: false });
+        }
+    }
 });
 
 // ── Start ──────────────────────────────────────────────────────────────────────

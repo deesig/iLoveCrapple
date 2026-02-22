@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './AuthContext';
 import LoginPage from './LoginPage';
 import UsernamePage from './UsernamePage';
 import DigitalJournal from './DigitalJournal';
+import DiscoveryPage from './DiscoveryPage';
 
 // Protected route: requires authentication
 function ProtectedRoute({ children, requireUsername = false }) {
@@ -32,6 +33,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <UsernamePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/discover"
+        element={
+          <ProtectedRoute requireUsername>
+            <DiscoveryPage />
           </ProtectedRoute>
         }
       />

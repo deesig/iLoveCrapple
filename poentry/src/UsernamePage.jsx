@@ -15,7 +15,7 @@ export default function UsernamePage() {
     // Redirect unauthenticated users
     useEffect(() => {
         if (!loading && !user) navigate('/', { replace: true });
-        if (!loading && user?.username) navigate('/journal', { replace: true });
+        if (!loading && user?.username) navigate('/discover', { replace: true });
     }, [user, loading, navigate]);
 
     // Debounced availability check
@@ -61,7 +61,7 @@ export default function UsernamePage() {
         setSubmitting(true);
         try {
             await saveUsername(username.trim());
-            navigate('/journal', { replace: true });
+            navigate('/discover', { replace: true });
         } catch (err) {
             setError(err.message);
         } finally {

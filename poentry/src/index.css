@@ -619,3 +619,535 @@ body {
 .canvas-context-menu button:active {
   background: rgba(124, 106, 239, 0.4);
 }
+
+/* ── Discovery Page ─────────────────────────────────────────────────────── */
+.discovery-page {
+  min-height: 100vh;
+  background: #f5f0eb;
+  font-family: var(--font-sans);
+  color: #2a2a2a;
+  position: relative;
+}
+
+/* Header */
+.disc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 40px;
+  border-bottom: 1px solid #ddd;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.disc-logo {
+  font-family: 'Instrument Serif', 'DM Serif Text', Georgia, serif;
+  font-size: 2rem;
+  font-weight: 400;
+  color: #1a1a2e;
+  letter-spacing: -0.02em;
+}
+
+.disc-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.disc-new-entry-btn {
+  background: #1a237e;
+  color: #fff;
+  border: none;
+  border-radius: 24px;
+  padding: 10px 24px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.disc-new-entry-btn:hover {
+  background: #283593;
+  transform: translateY(-1px);
+}
+
+.disc-user-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border: 1px solid #ccc;
+  border-radius: 24px;
+  background: #fff;
+}
+
+.disc-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.disc-username {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.disc-icon-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #ccc;
+  border-radius: 50%;
+  background: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.disc-icon-btn:hover {
+  background: #f0f0f0;
+}
+
+/* Explore Controls */
+.disc-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 40px;
+}
+
+.disc-controls-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.disc-explore-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #666;
+}
+
+.disc-filter-pills {
+  display: flex;
+  gap: 0;
+}
+
+.disc-pill {
+  padding: 8px 20px;
+  border: 2px solid #e8642b;
+  background: transparent;
+  color: #e8642b;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.disc-pill:first-child {
+  border-radius: 20px 0 0 20px;
+}
+
+.disc-pill:last-child {
+  border-radius: 0 20px 20px 0;
+}
+
+.disc-pill-active {
+  background: #e8642b;
+  color: #fff;
+}
+
+.disc-search-wrapper {
+  position: relative;
+}
+
+.disc-search-input {
+  padding: 8px 40px 8px 16px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-family: var(--font-sans);
+  background: #fff;
+  width: 200px;
+  transition: border-color 0.2s;
+}
+
+.disc-search-input:focus {
+  outline: none;
+  border-color: #e8642b;
+}
+
+.disc-search-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+
+/* Main Content */
+.disc-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 48px;
+  padding: 20px 60px 0;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Book Thumbnail */
+.disc-book-container {
+  flex-shrink: 0;
+  perspective: 800px;
+}
+
+.disc-book {
+  display: flex;
+  width: 420px;
+  height: 480px;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(0, 0, 0, 0.05);
+  background: #faf8f5;
+}
+
+.disc-book-left {
+  width: 48%;
+  background: linear-gradient(to right,
+      #f0e8dc 0%,
+      #faf5ee 15%,
+      #fdf9f3 50%,
+      #faf5ee 85%,
+      #ece4d8 100%);
+  border-right: 1px solid #e0d5c5;
+  position: relative;
+}
+
+.disc-book-left::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 20px;
+  background: linear-gradient(to right, transparent, rgba(0, 0, 0, 0.04));
+}
+
+.disc-book-spine {
+  width: 4%;
+  background: linear-gradient(to right,
+      #dfd3c2,
+      #c9baa6 40%,
+      #dfd3c2);
+  box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.2);
+}
+
+.disc-book-right {
+  width: 48%;
+  background: #fdf9f3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.disc-book-thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.disc-book-blank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: #bbb;
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+/* Entry Info */
+.disc-info {
+  flex: 1;
+  padding-top: 10px;
+}
+
+.disc-title {
+  font-family: 'DM Serif Text', 'Instrument Serif', Georgia, serif;
+  font-size: 2rem;
+  font-weight: 400;
+  color: #1a1a2e;
+  margin-bottom: 12px;
+  line-height: 1.2;
+}
+
+.disc-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.disc-date {
+  font-size: 0.9rem;
+  color: #777;
+}
+
+.disc-author {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.disc-description {
+  font-size: 0.9rem;
+  line-height: 1.7;
+  color: #555;
+  margin-bottom: 24px;
+  max-height: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.disc-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.disc-read-btn {
+  background: #e8642b;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 32px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.disc-read-btn:hover {
+  background: #d45520;
+  transform: translateY(-1px);
+}
+
+.disc-social-icons {
+  display: flex;
+  gap: 8px;
+}
+
+.disc-social-btn {
+  width: 42px;
+  height: 42px;
+  border: 2px solid #ddd;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.disc-social-btn:hover {
+  border-color: #e8642b;
+  background: rgba(232, 100, 43, 0.06);
+}
+
+.disc-liked {
+  border-color: #e63946;
+  background: rgba(230, 57, 70, 0.08);
+}
+
+.disc-bookmarked {
+  border-color: #7c6aef;
+  background: rgba(124, 106, 239, 0.08);
+}
+
+/* Comments Section */
+.disc-comments-section {
+  padding: 24px 60px 80px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.disc-comments-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #999;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #ddd;
+}
+
+.disc-notes-area {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  min-height: 160px;
+  padding: 12px 0;
+}
+
+.disc-sticky-note {
+  width: 180px;
+  min-height: 100px;
+  padding: 14px 16px;
+  border-radius: 2px;
+  box-shadow:
+    2px 3px 8px rgba(0, 0, 0, 0.12),
+    0 1px 3px rgba(0, 0, 0, 0.06);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: #333;
+  position: relative;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.disc-sticky-note:hover {
+  transform: scale(1.04) rotate(0deg) !important;
+  box-shadow: 4px 6px 16px rgba(0, 0, 0, 0.18);
+  z-index: 5;
+}
+
+.disc-note-input {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.disc-note-textarea {
+  width: 100%;
+  height: 60px;
+  border: none;
+  background: transparent;
+  resize: none;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  color: #333;
+  outline: none;
+}
+
+.disc-note-textarea::placeholder {
+  color: #999;
+  font-style: italic;
+}
+
+.disc-note-send {
+  align-self: flex-end;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.1);
+  color: #555;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.disc-note-send:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.disc-note-content {
+  margin: 0;
+}
+
+.disc-note-author {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.7rem;
+  color: rgba(0, 0, 0, 0.45);
+  font-style: italic;
+}
+
+/* Navigation Arrows */
+.disc-nav {
+  position: fixed;
+  bottom: 24px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 40px;
+  pointer-events: none;
+}
+
+.disc-nav-btn {
+  pointer-events: auto;
+  background: transparent;
+  border: none;
+  font-size: 1.8rem;
+  color: #e8642b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-sans);
+  transition: transform 0.1s, color 0.2s;
+}
+
+.disc-nav-btn:hover:not(:disabled) {
+  transform: scale(1.1);
+}
+
+.disc-nav-btn:disabled {
+  color: #ccc;
+  cursor: default;
+}
+
+.disc-nav-key {
+  font-size: 0.8rem;
+  color: #aaa;
+  font-weight: 600;
+}
+
+/* Empty State */
+.disc-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  text-align: center;
+  gap: 16px;
+}
+
+.disc-empty-icon {
+  font-size: 4rem;
+  animation: iconBounce 2s ease-in-out infinite;
+}
+
+.disc-empty-state h2 {
+  font-family: 'DM Serif Text', Georgia, serif;
+  font-size: 1.6rem;
+  color: #333;
+}
+
+.disc-empty-state p {
+  color: #777;
+  font-size: 0.95rem;
+}

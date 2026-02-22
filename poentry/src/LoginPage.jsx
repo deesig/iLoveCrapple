@@ -12,7 +12,7 @@ export default function LoginPage() {
     // Redirect if already logged in
     useEffect(() => {
         if (!loading && user) {
-            navigate(user.username ? '/journal' : '/username', { replace: true });
+            navigate(user.username ? '/discover' : '/username', { replace: true });
         }
     }, [user, loading, navigate]);
 
@@ -20,7 +20,7 @@ export default function LoginPage() {
         async (response) => {
             try {
                 const data = await login(response.credential);
-                navigate(data.username ? '/journal' : '/username', { replace: true });
+                navigate(data.username ? '/discover' : '/username', { replace: true });
             } catch (err) {
                 console.error('Login error:', err);
             }
