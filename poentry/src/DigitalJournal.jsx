@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import * as fabric from 'fabric';
+import { useAuth } from './AuthContext';
+import ImageSidebar from './ImageSidebar';
 
 // ── Toolbar constants ──────────────────────────────────────────────────────────
 const FONTS = ['Courier New', 'Arial', 'Georgia', 'Times New Roman', 'Verdana', 'Helvetica'];
@@ -51,6 +54,8 @@ function getSelectionStyle(tb) {
 }
 
 const DigitalJournal = () => {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const canvasRef = useRef(null);
   const [fabricCanvas, setFabricCanvas] = useState(null);
   // Persists the last known text selection so toolbar clicks can restore it
@@ -59,6 +64,12 @@ const DigitalJournal = () => {
 
   // Toolbar state — reflects the active selection / active textbox
   const [activeTextbox, setActiveTextbox] = useState(null);
+  const [saveStatus, setSaveStatus] = useState('');
+  const saveTimerRef = useRef(null);
+  const [userImages, setUserImages] = useState([]);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const fileInputRef = useRef(null);
+  const [contextMenu, setContextMenu] = useState(null); // { x, y, target }
   const [fmt, setFmt] = useState({
     fontFamily: 'Courier New',
     fontSize: 20,
@@ -72,6 +83,73 @@ const DigitalJournal = () => {
   // Grid Configuration
   const GRID_SIZE = 30;
   const DOT_SIZE = 1.5;
+
+  // ── initDimensions override helper — applied to every textbox ──────────
+  // Extracts the initDimensions override into a reusable function so it can
+  // be applied both to newly created textboxes AND to textboxes loaded from
+  // saved JSON.
+  const applyTextboxOverrides = useCallback((tb) => {
+    tb._lockedWidth = tb._lockedWidth || tb.width;
+    const _origInit = tb.initDimensions.bind(tb);
+    tb.initDimensions = function () {
+      const savedTop = this.top;
+      if (this.isEditing && this._lockedWidth !== undefined) {
+        this.width = this._lockedWidth;
+        _origInit();
+        this.width = this._lockedWidth;
+      } else {
+        _origInit();
+        this._lockedWidth = this.width;
+      }
+      this.top = savedTop;
+    };
+  }, []);
+
+  // ── Canvas save (debounced) ───────────────────────────────────────────────
+  const saveCanvas = useCallback((canvas) => {
+    if (!canvas) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    setSaveStatus('Saving...');
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        const json = canvas.toJSON(['splitByGrapheme', '_lockedWidth']);
+        await fetch('/api/canvas', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ canvasJSON: json }),
+        });
+        setSaveStatus('Saved ✓');
+        setTimeout(() => setSaveStatus(''), 2000);
+      } catch (err) {
+        console.error('Save failed:', err);
+        setSaveStatus('Save failed');
+      }
+    }, 1500);
+  }, []);
+
+  // ── Load saved canvas ─────────────────────────────────────────────────────
+  const loadCanvas = useCallback(async (canvas) => {
+    try {
+      const res = await fetch('/api/canvas', { credentials: 'include' });
+      if (!res.ok) return;
+      const { canvasJSON } = await res.json();
+      if (!canvasJSON || !canvasJSON.objects?.length) return;
+
+      await canvas.loadFromJSON(canvasJSON);
+
+      // Re-apply our custom overrides to every loaded textbox
+      canvas.getObjects().forEach((obj) => {
+        if (obj.type === 'textbox') {
+          applyTextboxOverrides(obj);
+        }
+      });
+
+      canvas.requestRenderAll();
+    } catch (err) {
+      console.error('Load failed:', err);
+    }
+  }, [applyTextboxOverrides]);
 
   // ── Sync toolbar state from canvas selection ─────────────────────────────
   const syncFmt = useCallback((tb) => {
@@ -95,6 +173,8 @@ const DigitalJournal = () => {
       height: window.innerHeight,
       width: window.innerWidth,
       selection: true,
+      fireRightClick: true,
+      stopContextMenu: true,
     });
 
     // Dotted background
@@ -159,6 +239,16 @@ const DigitalJournal = () => {
       onChanged({ target });
     });
     canvas.on('text:changed', onChanged);
+
+    // ── Auto-save triggers ─────────────────────────────────────────────────
+    const triggerSave = () => saveCanvas(canvas);
+    canvas.on('object:modified', triggerSave);
+    canvas.on('text:changed', triggerSave);
+    canvas.on('object:added', triggerSave);
+    canvas.on('object:removed', triggerSave);
+
+    // Load saved canvas data
+    loadCanvas(canvas);
 
     setFabricCanvas(canvas);
     return () => canvas.dispose();
@@ -298,30 +388,253 @@ const DigitalJournal = () => {
       splitByGrapheme: true,
     });
 
-    text._lockedWidth = text.width;
-    const _origInit = text.initDimensions.bind(text);
-    text.initDimensions = function () {
-      const savedTop = this.top;
-      if (this.isEditing && this._lockedWidth !== undefined) {
-        this.width = this._lockedWidth;
-        _origInit();
-        this.width = this._lockedWidth;
-      } else {
-        _origInit();
-        this._lockedWidth = this.width;
-      }
-      this.top = savedTop;
-    };
-
+    applyTextboxOverrides(text);
     fabricCanvas.add(text);
     fabricCanvas.setActiveObject(text);
   };
+
+  // ── Image helpers ────────────────────────────────────────────────────────
+  const generateThumbnail = useCallback((dataUrl, maxSize = 150) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const scale = Math.min(maxSize / img.width, maxSize / img.height, 1);
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+      img.src = dataUrl;
+    });
+  }, []);
+
+  const addImageToCanvas = useCallback((dataUrl, x, y) => {
+    if (!fabricCanvas) return;
+    const imgEl = new Image();
+    imgEl.crossOrigin = 'anonymous';
+    imgEl.onload = () => {
+      const fImg = new fabric.FabricImage(imgEl, {
+        left: x ?? 100,
+        top: y ?? 100,
+      });
+      // Scale to fit reasonably on canvas (max 400px wide)
+      const maxW = 400;
+      if (fImg.width > maxW) {
+        fImg.scaleToWidth(maxW);
+      }
+      fabricCanvas.add(fImg);
+      fabricCanvas.setActiveObject(fImg);
+      fabricCanvas.requestRenderAll();
+    };
+    imgEl.src = dataUrl;
+  }, [fabricCanvas]);
+
+  const uploadImageToServer = useCallback(async (dataUrl, filename = 'pasted-image') => {
+    try {
+      const thumbnail = await generateThumbnail(dataUrl);
+      const res = await fetch('/api/images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ imageData: dataUrl, thumbnail, filename }),
+      });
+      if (!res.ok) throw new Error('Upload failed');
+      const data = await res.json();
+      setUserImages((prev) => [{ id: data.id, thumbnail: data.thumbnail, filename: data.filename }, ...prev]);
+    } catch (err) {
+      console.error('Image upload error:', err);
+    }
+  }, [generateThumbnail]);
+
+  const handleAddFromSidebar = useCallback(async (imageId) => {
+    try {
+      const res = await fetch(`/api/images/${imageId}`, { credentials: 'include' });
+      if (!res.ok) return;
+      const { imageData } = await res.json();
+      addImageToCanvas(imageData);
+    } catch (err) {
+      console.error('Failed to load image:', err);
+    }
+  }, [addImageToCanvas]);
+
+  const handleDeleteImage = useCallback(async (imageId) => {
+    try {
+      await fetch(`/api/images/${imageId}`, { method: 'DELETE', credentials: 'include' });
+      setUserImages((prev) => prev.filter((img) => img.id !== imageId));
+    } catch (err) {
+      console.error('Failed to delete image:', err);
+    }
+  }, []);
+
+  // ── Paste handler ───────────────────────────────────────────────────────
+  useEffect(() => {
+    const handlePaste = (e) => {
+      // Don't intercept paste when a textbox is being edited
+      if (fabricCanvas?.getActiveObject()?.isEditing) return;
+
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            const dataUrl = ev.target.result;
+            addImageToCanvas(dataUrl);
+            uploadImageToServer(dataUrl, file.name || 'pasted-image');
+          };
+          reader.readAsDataURL(file);
+          break;
+        }
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [fabricCanvas, addImageToCanvas, uploadImageToServer]);
+
+  // ── File upload handler ──────────────────────────────────────────────────
+  const handleUploadImage = useCallback((e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target.result;
+      addImageToCanvas(dataUrl);
+      uploadImageToServer(dataUrl, file.name);
+    };
+    reader.readAsDataURL(file);
+    // Reset so same file can be uploaded again
+    e.target.value = '';
+  }, [addImageToCanvas, uploadImageToServer]);
+
+  // ── Load user images on mount ────────────────────────────────────────────
+  useEffect(() => {
+    fetch('/api/images', { credentials: 'include' })
+      .then((res) => (res.ok ? res.json() : { images: [] }))
+      .then(({ images }) => setUserImages(images))
+      .catch(() => { });
+  }, []);
+
+  // ── Logout handler ──────────────────────────────────────────────────────
+  const handleLogout = async () => {
+    await logout();
+    navigate('/', { replace: true });
+  };
+
+  // ── Drag-and-drop from sidebar ─────────────────────────────────────────
+  const handleDragOver = useCallback((e) => {
+    if (e.dataTransfer.types.includes('application/x-poentry-image')) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  }, []);
+
+  const handleDrop = useCallback(async (e) => {
+    const imageId = e.dataTransfer.getData('application/x-poentry-image');
+    if (!imageId) return;
+    e.preventDefault();
+
+    // Calculate canvas-relative position
+    const canvasEl = canvasRef.current;
+    const rect = canvasEl.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    try {
+      const res = await fetch(`/api/images/${imageId}`, { credentials: 'include' });
+      if (!res.ok) return;
+      const { imageData } = await res.json();
+      addImageToCanvas(imageData, x, y);
+    } catch (err) {
+      console.error('Drop image error:', err);
+    }
+  }, [addImageToCanvas]);
+
+  // ── Right-click context menu ───────────────────────────────────────────
+  useEffect(() => {
+    if (!fabricCanvas) return;
+
+    const handleContextMenu = (opt) => {
+      const e = opt.e;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const target = fabricCanvas.findTarget(e);
+      if (!target) {
+        setContextMenu(null);
+        return;
+      }
+
+      fabricCanvas.setActiveObject(target);
+      fabricCanvas.requestRenderAll();
+      setContextMenu({ x: e.clientX, y: e.clientY, target });
+    };
+
+    fabricCanvas.on('mouse:down', (opt) => {
+      if (opt.e?.button !== 2) {
+        setContextMenu(null);
+      }
+    });
+    fabricCanvas.on('mouse:down:before', (opt) => {
+      if (opt.e?.button === 2) {
+        handleContextMenu(opt);
+      }
+    });
+
+    // Suppress native context menu on the canvas
+    const canvasEl = fabricCanvas.upperCanvasEl;
+    const suppress = (e) => e.preventDefault();
+    canvasEl.addEventListener('contextmenu', suppress);
+
+    return () => {
+      canvasEl.removeEventListener('contextmenu', suppress);
+    };
+  }, [fabricCanvas]);
+
+  const handleZOrder = useCallback((action) => {
+    if (!fabricCanvas || !contextMenu?.target) return;
+    const obj = contextMenu.target;
+    switch (action) {
+      case 'front': fabricCanvas.bringObjectToFront(obj); break;
+      case 'back': fabricCanvas.sendObjectToBack(obj); break;
+      case 'forward': fabricCanvas.bringObjectForward(obj); break;
+      case 'backward': fabricCanvas.sendObjectBackwards(obj); break;
+    }
+    fabricCanvas.requestRenderAll();
+    setContextMenu(null);
+  }, [fabricCanvas, contextMenu]);
+
+  // Close context menu on click anywhere
+  useEffect(() => {
+    const close = () => setContextMenu(null);
+    window.addEventListener('click', close);
+    return () => window.removeEventListener('click', close);
+  }, []);
 
   // ── Render ───────────────────────────────────────────────────────────────
   const toolbarVisible = !!activeTextbox;
 
   return (
-    <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', backgroundColor: '#fffff5' }}>
+    <div
+      style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', backgroundColor: '#fffff5' }}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+
+      {/* ── User header (top-right) ── */}
+      <div className="journal-header">
+        <div className="journal-user-info">
+          {user?.avatarUrl && <img src={user.avatarUrl} alt="" className="journal-avatar" />}
+          <span className="journal-username">@{user?.username}</span>
+        </div>
+        {saveStatus && <span className="journal-save-status">{saveStatus}</span>}
+        <button onClick={handleLogout} className="journal-logout-btn">Log out</button>
+      </div>
 
       {/* ── Top toolbar strip ── */}
       {/* onMouseDown: prevent focus from leaving the canvas when clicking buttons.
@@ -356,6 +669,27 @@ const DigitalJournal = () => {
         }}>
           + Add Text
         </button>
+
+        {/* Upload Image button — always visible */}
+        <button onClick={() => fileInputRef.current?.click()} style={{
+          cursor: 'pointer',
+          padding: '5px 12px',
+          background: '#555',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          fontSize: '13px',
+          fontWeight: 'bold',
+        }}>
+          🖼️ Add Image
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png"
+          style={{ display: 'none' }}
+          onChange={handleUploadImage}
+        />
 
         {/* Formatting controls — only when a textbox is selected */}
         {toolbarVisible && <>
@@ -425,6 +759,29 @@ const DigitalJournal = () => {
 
       {/* The Journal Canvas */}
       <canvas ref={canvasRef} style={{ marginTop: '44px' }} />
+
+      {/* Image Sidebar */}
+      <ImageSidebar
+        images={userImages}
+        onAddToCanvas={handleAddFromSidebar}
+        onDelete={handleDeleteImage}
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed((p) => !p)}
+      />
+
+      {/* Right-click context menu */}
+      {contextMenu && (
+        <div
+          className="canvas-context-menu"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button onClick={() => handleZOrder('front')}>Bring to Front</button>
+          <button onClick={() => handleZOrder('forward')}>Bring Forward</button>
+          <button onClick={() => handleZOrder('backward')}>Send Backward</button>
+          <button onClick={() => handleZOrder('back')}>Send to Back</button>
+        </div>
+      )}
     </div>
   );
 };
