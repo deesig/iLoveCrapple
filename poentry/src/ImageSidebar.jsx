@@ -15,7 +15,7 @@ export default function ImageSidebar({ images, onAddToCanvas, onDelete, collapse
             {/* Sidebar panel */}
             <div className={`image-sidebar ${collapsed ? 'sidebar-collapsed' : 'sidebar-open'}`}>
                 <div className="sidebar-header">
-                    <span className="sidebar-title">📎 Images</span>
+                    <span className="sidebar-title">Images</span>
                     <span className="sidebar-count">{images.length}</span>
                 </div>
 
