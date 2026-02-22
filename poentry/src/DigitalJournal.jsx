@@ -5,7 +5,12 @@ import { useAuth } from './AuthContext';
 import ImageSidebar from './ImageSidebar';
 
 // ── Toolbar constants ──────────────────────────────────────────────────────────
-const FONTS = ['Courier New', 'Arial', 'Georgia', 'Times New Roman', 'Verdana', 'Helvetica'];
+const FONTS = [
+  'Courier New', 'Arial', 'Georgia', 'Times New Roman', 'Verdana', 'Helvetica',
+  'Atma', 'Averia Serif Libre', 'DM Sans', 'DM Serif Text', 'Google Sans',
+  'IBM Plex Serif', 'Instrument Serif', 'Manrope', 'Newsreader', 'Oswald',
+  'Outfit', 'Public Sans', 'Roboto Flex', 'Sour Gummy', 'Story Script', 'Vollkorn'
+];
 const FONT_SIZES = [10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 64];
 
 // ── Shared toolbar button style ───────────────────────────────────────────────
