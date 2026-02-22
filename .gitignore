@@ -33,3 +33,9 @@ Thumbs.db
 # Vite
 *.local
 vite.config.js.timestamp-*
+
+# SQLite databases (auto-created on first run)
+*.db
+*.db-wal
+*.db-shm
+sessions/
