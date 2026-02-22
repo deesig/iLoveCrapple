@@ -124,9 +124,28 @@ const DigitalJournal = () => {
     setSaveStatus('Saving...');
     saveTimerRef.current = setTimeout(async () => {
       try {
-        const json = canvas.toJSON(['splitByGrapheme', '_lockedWidth', '_isPageBg', '_isAudio', 'audioId', '_overlayId']);
-        // Filter out the page background rect from saved data
-        json.objects = json.objects.filter(o => !o._isPageBg);
+        const json = canvas.toJSON();
+
+        // Fabric v7 doesn't reliably pass custom properties down through canvas.toJSON().
+        // We manually serialize and attach the necessary metadata here.
+        const objects = canvas.getObjects().map(obj => {
+          let o = obj.toJSON ? obj.toJSON() : obj.toObject();
+
+          if (obj._isPageBg) o._isPageBg = true;
+          if (obj._isAudio) {
+            o._isAudio = true;
+            o.audioId = obj.audioId;
+            o._overlayId = obj._overlayId;
+          }
+          if (obj.splitByGrapheme !== undefined) o.splitByGrapheme = obj.splitByGrapheme;
+          if (obj._lockedWidth !== undefined) o._lockedWidth = obj._lockedWidth;
+
+          return o;
+        });
+
+        // Filter out the page background rect from saved data to prevent loading duplicate patterns
+        json.objects = objects.filter(o => !o._isPageBg);
+
         await fetch('/api/canvas', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -148,6 +167,9 @@ const DigitalJournal = () => {
       const res = await fetch('/api/canvas', { credentials: 'include' });
       if (!res.ok) return;
       const { canvasJSON } = await res.json();
+
+      if (canvas.__isDisposed) return;
+
       if (!canvasJSON || !canvasJSON.objects?.length) return;
 
       // Clean up old duplicated pages and migrate element coordinates safely
@@ -156,6 +178,7 @@ const DigitalJournal = () => {
       canvasJSON.objects = canvasJSON.objects.filter((o) => {
         const isPageRect = o._isPageBg || (
           o.type && o.type.toLowerCase() === 'rect' &&
+          !o._isAudio &&
           !o.selectable && !o.evented
         );
         if (isPageRect) {
@@ -177,12 +200,32 @@ const DigitalJournal = () => {
         });
       }
 
-      await canvas.loadFromJSON(canvasJSON);
+      if (canvas.__isDisposed) return;
 
-      // Re-apply our custom overrides to every loaded textbox
-      // And fetch audio URLs for audio placeholders
+      try {
+        await canvas.loadFromJSON(canvasJSON);
+      } catch (loadErr) {
+        // Fabric may throw if canvas was disposed mid-load (React Strict Mode)
+        console.warn('loadFromJSON failed (likely disposed canvas):', loadErr.message);
+        return;
+      }
+
+      if (canvas.__isDisposed) return;
+
+      // Ensure parsed is an object to prevent indexing errors
+      const parsed = typeof canvasJSON === 'string' ? JSON.parse(canvasJSON) : canvasJSON;
+
+      // Re-apply our custom overrides and manually restore dropped properties
       const loadedAudios = [];
-      canvas.getObjects().forEach((obj) => {
+      canvas.getObjects().forEach((obj, i) => {
+        const sourceData = parsed.objects[i];
+
+        if (sourceData && sourceData._isAudio) {
+          obj._isAudio = true;
+          obj.audioId = sourceData.audioId;
+          obj._overlayId = sourceData._overlayId;
+        }
+
         if (obj.type === 'textbox') {
           applyTextboxOverrides(obj);
         } else if (obj._isAudio && obj.audioId) {
@@ -363,21 +406,54 @@ const DigitalJournal = () => {
     loadCanvas(canvas, page);
 
     setFabricCanvas(canvas);
-    return () => canvas.dispose();
+    return () => {
+      canvas.__isDisposed = true;
+      canvas.dispose();
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Delete key handler ───────────────────────────────────────────────────
+  // ── Keyboard handler (Delete & Arrow keys) ──────────────────────────────
   useEffect(() => {
     if (!fabricCanvas) return;
     const handleKeyDown = (e) => {
-      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
-      const active = fabricCanvas.getActiveObject();
-      if (active?.isEditing) return;
-      const objs = fabricCanvas.getActiveObjects();
-      if (!objs.length) return;
-      fabricCanvas.remove(...objs);
-      fabricCanvas.discardActiveObject();
-      fabricCanvas.requestRenderAll();
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      const activeObj = fabricCanvas.getActiveObject();
+      if (!activeObj || activeObj.isEditing) return;
+
+      // Handle Deletion
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const objs = fabricCanvas.getActiveObjects();
+        if (objs.length) {
+          objs.forEach(o => {
+            if (o._isPageBg) return;
+            fabricCanvas.remove(o);
+            if (o._isAudio) {
+              setSessionAudios(prev => prev.filter(a => a.overlayId !== o._overlayId));
+            }
+          });
+          fabricCanvas.discardActiveObject();
+          fabricCanvas.requestRenderAll();
+        }
+        return;
+      }
+
+      // Handle Arrow Grid Snapping
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault(); // prevent scrolling
+        const step = GRID_SIZE;
+
+        // Move the active object (which could be a single item or an ActiveSelection group)
+        if (e.key === 'ArrowUp') activeObj.top -= step;
+        if (e.key === 'ArrowDown') activeObj.top += step;
+        if (e.key === 'ArrowLeft') activeObj.left -= step;
+        if (e.key === 'ArrowRight') activeObj.left += step;
+
+        activeObj.setCoords();
+        fabricCanvas.requestRenderAll();
+        // Fire modified event to trigger the auto-save hook
+        fabricCanvas.fire('object:modified', { target: activeObj });
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
