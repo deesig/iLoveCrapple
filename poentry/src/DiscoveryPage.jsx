@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
+import bookPageSvg from './assets/bookPage.svg';
 
 // ── Sticky-note colour palette ────────────────────────────────────────────────
 const NOTE_COLORS = ['#d4f59f', '#f5d49f', '#9fd4f5', '#f59fd4', '#d49ff5', '#f5f59f'];
@@ -200,25 +201,22 @@ export default function DiscoveryPage() {
                         {/* ── Book Thumbnail ──────────────────────────────────────────── */}
                         <div className="disc-book-container">
                             <div className="disc-book">
-                                <div className="disc-book-left" />
-                                <div className="disc-book-spine" />
-                                <div className="disc-book-right">
-                                    {displayEntry.thumbnail ? (
-                                        <img
-                                            src={displayEntry.thumbnail}
-                                            alt={displayEntry.title}
-                                            className="disc-book-thumbnail"
-                                        />
-                                    ) : (
-                                        <div className="disc-book-blank">
-                                            <span>No preview</span>
-                                        </div>
-                                    )}
-                                </div>
+                                <img src={bookPageSvg} alt="" className="disc-book-svg" />
+                                {displayEntry.thumbnail ? (
+                                    <img
+                                        src={displayEntry.thumbnail}
+                                        alt={displayEntry.title}
+                                        className="disc-book-thumbnail"
+                                    />
+                                ) : (
+                                    <div className="disc-book-blank">
+                                        <span>No preview</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
-                        {/* ── Entry Info ──────────────────────────────────────────────── */}
+                        {/* ── Entry Info + Comments (right column) ─────────────────────── */}
                         <div className="disc-info">
                             <h2 className="disc-title">{displayEntry.title}</h2>
                             <div className="disc-meta">
@@ -252,44 +250,40 @@ export default function DiscoveryPage() {
                                     </button>
                                 </div>
                             </div>
-                        </div>
-                    </div>
 
-                    {/* ── Comments Section ──────────────────────────────────────────── */}
-                    <div className="disc-comments-section">
-                        <h3 className="disc-comments-label">COMMENTS</h3>
-                        <div className="disc-notes-area">
-                            {/* Leave a note input */}
-                            <div
-                                className="disc-sticky-note disc-note-input"
-                                style={{ background: '#fff9c4', transform: 'rotate(-2deg)' }}
-                            >
-                                <textarea
-                                    className="disc-note-textarea"
-                                    placeholder="Leave a note..."
-                                    value={newComment}
-                                    onChange={e => setNewComment(e.target.value)}
-                                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addComment(); } }}
-                                />
-                                <button className="disc-note-send" onClick={addComment}>↵</button>
-                            </div>
-
-                            {/* Existing sticky notes */}
-                            {comments.map((c) => (
+                            {/* ── Comments ── */}
+                            <h3 className="disc-comments-label">COMMENTS</h3>
+                            <div className="disc-notes-area">
+                                {/* Leave a note input */}
                                 <div
-                                    key={c.id}
-                                    className="disc-sticky-note"
-                                    style={{
-                                        background: c.color || '#d4f59f',
-                                        transform: `rotate(${c.rotation || 0}deg)`,
-                                        left: `${(c.posX || 0)}px`,
-                                        top: `${(c.posY || 0)}px`,
-                                    }}
+                                    className="disc-sticky-note disc-note-input"
+                                    style={{ background: '#fff9c4', transform: 'rotate(-2deg)' }}
                                 >
-                                    <p className="disc-note-content">{c.content}</p>
-                                    <span className="disc-note-author">— {c.username || 'anon'}</span>
+                                    <textarea
+                                        className="disc-note-textarea"
+                                        placeholder="Leave a note..."
+                                        value={newComment}
+                                        onChange={e => setNewComment(e.target.value)}
+                                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addComment(); } }}
+                                    />
+                                    <button className="disc-note-send" onClick={addComment}>↵</button>
                                 </div>
-                            ))}
+
+                                {/* Existing sticky notes */}
+                                {comments.map((c) => (
+                                    <div
+                                        key={c.id}
+                                        className="disc-sticky-note"
+                                        style={{
+                                            background: c.color || '#d4f59f',
+                                            transform: `rotate(${c.rotation || 0}deg)`,
+                                        }}
+                                    >
+                                        <p className="disc-note-content">{c.content}</p>
+                                        <span className="disc-note-author">— {c.username || 'anon'}</span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
 

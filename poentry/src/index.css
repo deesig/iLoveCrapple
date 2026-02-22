@@ -107,7 +107,7 @@ body {
   position: relative;
   z-index: 1;
   overflow: hidden;
-  
+
 }
 
 .main-logo {
@@ -121,25 +121,25 @@ body {
 }
 
 .google-btn-wrapper {
-    position: absolute;
-    top: 55%;
-    left: 55%;
-    transform: translate(-40%, -50%);
-    z-index: 9999;
+  position: absolute;
+  top: 55%;
+  left: 55%;
+  transform: translate(-40%, -50%);
+  z-index: 9999;
 }
 
 .login-bg-image {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 120%;
-    height: auto;
-    opacity: 0.8;
-    z-index: 0;
-    pointer-events: none;
-    opacity: 0.3;
-    overflow: hidden;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 120%;
+  height: auto;
+  opacity: 0.8;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.3;
+  overflow: hidden;
 }
 
 
@@ -745,82 +745,50 @@ body {
 .disc-main {
   display: flex;
   align-items: flex-start;
-  gap: 48px;
-  padding: 20px 60px 0;
+  gap: 40px;
+  padding: 10px 40px 80px;
   max-width: 1200px;
   margin: 0 auto;
 }
 
-/* Book Thumbnail */
+/* Book Thumbnail — SVG based */
 .disc-book-container {
   flex-shrink: 0;
-  perspective: 800px;
 }
 
 .disc-book {
-  display: flex;
-  width: 420px;
-  height: 480px;
-  border-radius: 4px;
-  overflow: hidden;
-  box-shadow:
-    0 4px 20px rgba(0, 0, 0, 0.15),
-    0 0 0 1px rgba(0, 0, 0, 0.05);
-  background: #faf8f5;
-}
-
-.disc-book-left {
-  width: 48%;
-  background: linear-gradient(to right,
-      #f0e8dc 0%,
-      #faf5ee 15%,
-      #fdf9f3 50%,
-      #faf5ee 85%,
-      #ece4d8 100%);
-  border-right: 1px solid #e0d5c5;
   position: relative;
+  width: 480px;
+  height: 530px;
 }
 
-.disc-book-left::after {
-  content: '';
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 20px;
-  background: linear-gradient(to right, transparent, rgba(0, 0, 0, 0.04));
-}
-
-.disc-book-spine {
-  width: 4%;
-  background: linear-gradient(to right,
-      #dfd3c2,
-      #c9baa6 40%,
-      #dfd3c2);
-  box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.2);
-}
-
-.disc-book-right {
-  width: 48%;
-  background: #fdf9f3;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
+.disc-book-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .disc-book-thumbnail {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  /* Position over the right page of the SVG */
+  top: 4.2%;
+  left: 23.5%;
+  width: 72%;
+  height: 87.5%;
   object-fit: cover;
+  object-position: top center;
+  pointer-events: none;
 }
 
 .disc-book-blank {
+  position: absolute;
+  top: 4.2%;
+  left: 23.5%;
+  width: 72%;
+  height: 87.5%;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  height: 100%;
   color: #bbb;
   font-size: 0.9rem;
   font-style: italic;
@@ -833,9 +801,9 @@ body {
 }
 
 .disc-title {
-  font-family: 'DM Serif Text', 'Instrument Serif', Georgia, serif;
+  font-family: 'Averia Serif Libre', serif;
   font-size: 2rem;
-  font-weight: 400;
+  font-weight: 700;
   color: #1a1a2e;
   margin-bottom: 12px;
   line-height: 1.2;
@@ -864,15 +832,13 @@ body {
   line-height: 1.7;
   color: #555;
   margin-bottom: 24px;
-  max-height: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .disc-actions-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-bottom: 20px;
 }
 
 .disc-read-btn {

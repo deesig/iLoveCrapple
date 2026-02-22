@@ -1212,9 +1212,20 @@ const DigitalJournal = () => {
                   if (!fabricCanvas || publishing) return;
                   setPublishing(true);
                   try {
-                    // Generate thumbnail from the canvas
+                    // Generate thumbnail cropped to just the page area
                     const lowerCanvas = fabricCanvas.lowerCanvasEl || fabricCanvas.getElement();
-                    const thumbnail = lowerCanvas.toDataURL('image/png');
+                    const pg = pageRef.current;
+                    const sx = pg ? pg.left : PAGE_MARGIN;
+                    const sy = pg ? pg.top : PAGE_MARGIN;
+                    const sw = PAGE_W;
+                    const sh = PAGE_H;
+                    // Draw the cropped region onto an offscreen canvas
+                    const offscreen = document.createElement('canvas');
+                    offscreen.width = sw;
+                    offscreen.height = sh;
+                    const octx = offscreen.getContext('2d');
+                    octx.drawImage(lowerCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+                    const thumbnail = offscreen.toDataURL('image/png');
                     // Get the canvas JSON
                     const objects = fabricCanvas.getObjects().map(obj => {
                       let o = obj.toJSON ? obj.toJSON() : obj.toObject();
