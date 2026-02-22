@@ -439,15 +439,24 @@ const DigitalJournal = () => {
   };
 
   // ── Add text box ─────────────────────────────────────────────────────────
-  const addTextBox = () => {
+  const addTextBox = useCallback((eOrX, optY) => {
     if (!fabricCanvas) return;
-    // Place inside the page area
-    const page = pageRef.current;
-    const pLeft = page ? page.left + 100 : 200;
-    const pTop = page ? page.top + 30 : 100;
+
+    let left, top;
+    // Handle if called with coordinates vs click event
+    if (typeof eOrX === 'number' && typeof optY === 'number') {
+      left = eOrX;
+      top = optY;
+    } else {
+      // Place inside the page area
+      const page = pageRef.current;
+      left = page ? page.left + 100 : 200;
+      top = page ? page.top + 30 : 100;
+    }
+
     const text = new fabric.Textbox('Type here...', {
-      left: Math.round(pLeft / GRID_SIZE) * GRID_SIZE,
-      top: Math.round(pTop / GRID_SIZE) * GRID_SIZE,
+      left: Math.round(left / GRID_SIZE) * GRID_SIZE,
+      top: Math.round(top / GRID_SIZE) * GRID_SIZE,
       width: 240,
       fontFamily: 'Courier New',
       fontSize: 20,
@@ -460,7 +469,7 @@ const DigitalJournal = () => {
     applyTextboxOverrides(text);
     fabricCanvas.add(text);
     fabricCanvas.setActiveObject(text);
-  };
+  }, [fabricCanvas, applyTextboxOverrides]);
 
   // ── Image helpers ────────────────────────────────────────────────────────
   const generateThumbnail = useCallback((dataUrl, maxSize = 150) => {
@@ -597,15 +606,18 @@ const DigitalJournal = () => {
 
   // ── Drag-and-drop from sidebar ─────────────────────────────────────────
   const handleDragOver = useCallback((e) => {
-    if (e.dataTransfer.types.includes('application/x-poentry-image')) {
+    if (e.dataTransfer.types.includes('application/x-poentry-image') ||
+      e.dataTransfer.types.includes('application/x-poentry-text')) {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
     }
   }, []);
 
   const handleDrop = useCallback(async (e) => {
+    const isText = e.dataTransfer.getData('application/x-poentry-text');
     const imageId = e.dataTransfer.getData('application/x-poentry-image');
-    if (!imageId) return;
+
+    if (!imageId && !isText) return;
     e.preventDefault();
 
     // Calculate canvas-relative position
@@ -613,6 +625,11 @@ const DigitalJournal = () => {
     const rect = canvasEl.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
+
+    if (isText) {
+      addTextBox(x, y);
+      return;
+    }
 
     try {
       const res = await fetch(`/api/images/${imageId}`, { credentials: 'include' });
@@ -622,7 +639,7 @@ const DigitalJournal = () => {
     } catch (err) {
       console.error('Drop image error:', err);
     }
-  }, [addImageToCanvas]);
+  }, [addImageToCanvas, addTextBox]);
 
   // ── Right-click context menu ───────────────────────────────────────────
   useEffect(() => {
@@ -698,10 +715,11 @@ const DigitalJournal = () => {
 
       {/* ── Top toolbar strip ── */}
       {/* onMouseDown: prevent focus from leaving the canvas when clicking buttons.
-          Skipped for <select> so native dropdowns still open; those are handled
-          by the lastSelRef restore path in applyStyle instead. */}
+          Skipped for <select> and draggable elements so native behaviors still work. */}
       <div
-        onMouseDown={(e) => { if (e.target.tagName !== 'SELECT') e.preventDefault(); }}
+        onMouseDown={(e) => {
+          if (e.target.tagName !== 'SELECT' && !e.target.draggable) e.preventDefault();
+        }}
         style={{
           position: 'relative',
           zIndex: 10,
@@ -717,16 +735,24 @@ const DigitalJournal = () => {
       >
 
         {/* Add Text button — always visible */}
-        <button onClick={addTextBox} style={{
-          cursor: 'pointer',
-          padding: '5px 12px',
-          background: '#333',
-          color: 'white',
-          border: 'none',
-          borderRadius: '4px',
-          fontSize: '13px',
-          fontWeight: 'bold',
-        }}>
+        <button
+          onClick={addTextBox}
+          draggable
+          onDragStart={(e) => {
+            e.dataTransfer.setData('application/x-poentry-text', 'true');
+            e.dataTransfer.effectAllowed = 'copy';
+          }}
+          title="Click to add or drag to canvas"
+          style={{
+            cursor: 'grab',
+            padding: '5px 12px',
+            background: '#333',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            fontSize: '13px',
+            fontWeight: 'bold',
+          }}>
           + Add Text
         </button>
 
