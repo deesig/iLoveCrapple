@@ -80,9 +80,14 @@ const DigitalJournal = () => {
     textAlign: 'left',
   });
 
-  // Grid Configuration
+  // Page & Grid Configuration
+  // 11" × 8.5" landscape at 96 PPI (Google Docs letter size)
+  const PAGE_W = 8.5 * 180;   // 1056px
+  const PAGE_H = 11 * 180; // 816px
+  const PAGE_MARGIN = 40; // px margin around page
   const GRID_SIZE = 30;
   const DOT_SIZE = 1.5;
+  const pageRef = useRef(null); // reference to the page background rect
 
   // ── initDimensions override helper — applied to every textbox ──────────
   // Extracts the initDimensions override into a reusable function so it can
@@ -112,7 +117,9 @@ const DigitalJournal = () => {
     setSaveStatus('Saving...');
     saveTimerRef.current = setTimeout(async () => {
       try {
-        const json = canvas.toJSON(['splitByGrapheme', '_lockedWidth']);
+        const json = canvas.toJSON(['splitByGrapheme', '_lockedWidth', '_isPageBg']);
+        // Filter out the page background rect from saved data
+        json.objects = json.objects.filter(o => !o._isPageBg);
         await fetch('/api/canvas', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -129,12 +136,39 @@ const DigitalJournal = () => {
   }, []);
 
   // ── Load saved canvas ─────────────────────────────────────────────────────
-  const loadCanvas = useCallback(async (canvas) => {
+  const loadCanvas = useCallback(async (canvas, activePageObj) => {
     try {
       const res = await fetch('/api/canvas', { credentials: 'include' });
       if (!res.ok) return;
       const { canvasJSON } = await res.json();
       if (!canvasJSON || !canvasJSON.objects?.length) return;
+
+      // Clean up old duplicated pages and migrate element coordinates safely
+      let oldPageLeft = null;
+      let oldPageTop = null;
+      canvasJSON.objects = canvasJSON.objects.filter((o) => {
+        const isPageRect = o._isPageBg || (
+          o.type && o.type.toLowerCase() === 'rect' &&
+          !o.selectable && !o.evented
+        );
+        if (isPageRect) {
+          if (oldPageLeft === null) {
+            oldPageLeft = o.left;
+            oldPageTop = o.top;
+          }
+          return false;
+        }
+        return true;
+      });
+
+      if (oldPageLeft !== null && oldPageLeft !== PAGE_MARGIN) {
+        const dx = PAGE_MARGIN - oldPageLeft;
+        const dy = PAGE_MARGIN - (oldPageTop ?? PAGE_MARGIN);
+        canvasJSON.objects.forEach((o) => {
+          if (o.left !== undefined) o.left += dx;
+          if (o.top !== undefined) o.top += dy;
+        });
+      }
 
       await canvas.loadFromJSON(canvasJSON);
 
@@ -145,6 +179,12 @@ const DigitalJournal = () => {
         }
       });
 
+      // Restore page rect (loadFromJSON replaces all objects)
+      if (activePageObj) {
+        canvas.add(activePageObj);
+        canvas.sendObjectToBack(activePageObj);
+      }
+      canvas.set('backgroundColor', '#e8e8e8');
       canvas.requestRenderAll();
     } catch (err) {
       console.error('Load failed:', err);
@@ -169,28 +209,53 @@ const DigitalJournal = () => {
 
   // ── Canvas initialisation ────────────────────────────────────────────────
   useEffect(() => {
+    const canvasH = PAGE_H + PAGE_MARGIN * 2;
+    const canvasW = PAGE_W - PAGE_MARGIN * 14;
     const canvas = new fabric.Canvas(canvasRef.current, {
-      height: window.innerHeight,
-      width: window.innerWidth,
+      height: canvasH,
+      width: canvasW,
       selection: true,
       fireRightClick: true,
       stopContextMenu: true,
+      backgroundColor: '#e8e8e8',
     });
 
-    // Dotted background
-    const patternSourceCanvas = document.createElement('canvas');
-    patternSourceCanvas.width = GRID_SIZE;
-    patternSourceCanvas.height = GRID_SIZE;
-    const ctx = patternSourceCanvas.getContext('2d');
-    ctx.fillStyle = '#cccccc';
-    ctx.beginPath();
-    ctx.arc(GRID_SIZE / 2, GRID_SIZE / 2, DOT_SIZE, 0, 2 * Math.PI);
-    ctx.fill();
-    canvas.set('backgroundColor', new fabric.Pattern({ source: patternSourceCanvas, repeat: 'repeat' }));
-    canvas.requestRenderAll();
+    // ── Page background rect (non-interactive, always at back) ──────────
+    const pageLeft = PAGE_MARGIN;
+    const pageTop = PAGE_MARGIN;
+
+    // Create a dot-pattern tile for the page fill
+    const dotTile = document.createElement('canvas');
+    dotTile.width = GRID_SIZE;
+    dotTile.height = GRID_SIZE;
+    const dCtx = dotTile.getContext('2d');
+    dCtx.fillStyle = '#fffff5';
+    dCtx.fillRect(0, 0, GRID_SIZE, GRID_SIZE);
+    dCtx.fillStyle = '#cccccc';
+    dCtx.beginPath();
+    dCtx.arc(GRID_SIZE / 2, GRID_SIZE / 2, DOT_SIZE, 0, Math.PI * 2);
+    dCtx.fill();
+
+    const page = new fabric.Rect({
+      left: pageLeft,
+      top: pageTop,
+      width: PAGE_W,
+      height: PAGE_H,
+      fill: new fabric.Pattern({ source: dotTile, repeat: 'repeat' }),
+      selectable: false,
+      evented: false,
+      hasControls: false,
+      hoverCursor: 'default',
+      shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.15)', blur: 12, offsetX: 2, offsetY: 4 }),
+      _isPageBg: true,
+    });
+    canvas.add(page);
+    canvas.sendObjectToBack(page);
+    pageRef.current = page;
 
     // Snap to grid
     canvas.on('object:moving', ({ target }) => {
+      if (target._isPageBg) return;
       target.set({
         left: Math.round(target.left / GRID_SIZE) * GRID_SIZE,
         top: Math.round(target.top / GRID_SIZE) * GRID_SIZE,
@@ -248,7 +313,7 @@ const DigitalJournal = () => {
     canvas.on('object:removed', triggerSave);
 
     // Load saved canvas data
-    loadCanvas(canvas);
+    loadCanvas(canvas, page);
 
     setFabricCanvas(canvas);
     return () => canvas.dispose();
@@ -376,9 +441,13 @@ const DigitalJournal = () => {
   // ── Add text box ─────────────────────────────────────────────────────────
   const addTextBox = () => {
     if (!fabricCanvas) return;
+    // Place inside the page area
+    const page = pageRef.current;
+    const pLeft = page ? page.left + 100 : 200;
+    const pTop = page ? page.top + 30 : 100;
     const text = new fabric.Textbox('Type here...', {
-      left: Math.round(200 / GRID_SIZE) * GRID_SIZE,
-      top: Math.round(100 / GRID_SIZE) * GRID_SIZE,
+      left: Math.round(pLeft / GRID_SIZE) * GRID_SIZE,
+      top: Math.round(pTop / GRID_SIZE) * GRID_SIZE,
       width: 240,
       fontFamily: 'Courier New',
       fontSize: 20,
@@ -612,7 +681,7 @@ const DigitalJournal = () => {
 
   return (
     <div
-      style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', backgroundColor: '#fffff5' }}
+      style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', backgroundColor: '#e8e8e8', display: 'flex', flexDirection: 'column' }}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
@@ -634,8 +703,7 @@ const DigitalJournal = () => {
       <div
         onMouseDown={(e) => { if (e.target.tagName !== 'SELECT') e.preventDefault(); }}
         style={{
-          position: 'absolute',
-          top: 0, left: 0, right: 0,
+          position: 'relative',
           zIndex: 10,
           background: 'white',
           borderBottom: '1px solid #ddd',
@@ -644,6 +712,7 @@ const DigitalJournal = () => {
           alignItems: 'center',
           gap: '6px',
           flexWrap: 'wrap',
+          flexShrink: 0,
         }}
       >
 
@@ -748,8 +817,24 @@ const DigitalJournal = () => {
         </>}
       </div>
 
-      {/* The Journal Canvas */}
-      <canvas ref={canvasRef} style={{ marginTop: '44px' }} />
+      {/* The Journal Canvas — scrollable area below sticky toolbar */}
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        <div style={{
+          minWidth: `${Math.max(window.screen ? window.screen.availWidth : 1440, 1336)}px`,
+          minHeight: '100%',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'flex-start',
+          paddingTop: '40px',
+          paddingBottom: '40px',
+          paddingLeft: sidebarCollapsed ? '36px' : '200px',
+          transition: 'padding-left 0.2s ease'
+        }}>
+          <div style={{ position: 'relative' }}>
+            <canvas ref={canvasRef} />
+          </div>
+        </div>
+      </div>
 
       {/* Image Sidebar */}
       <ImageSidebar
