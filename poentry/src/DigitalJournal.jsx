@@ -954,7 +954,7 @@ const DigitalJournal = () => {
           fontSize: '13px',
           fontWeight: 'bold',
         }}>
-          🖼️ Add Image
+          Add Image
         </button>
         <input
           ref={fileInputRef}
@@ -975,7 +975,7 @@ const DigitalJournal = () => {
           fontSize: '13px',
           fontWeight: 'bold',
         }}>
-          🎵 Add Audio
+          Add Audio
         </button>
         <input
           ref={audioInputRef}
@@ -997,7 +997,7 @@ const DigitalJournal = () => {
           fontWeight: 'bold',
           marginLeft: '4px',
         }}>
-          📤 Publish
+          Publish
         </button>
 
         {/* Formatting controls — only when a textbox is selected */}
@@ -1266,7 +1266,7 @@ const DigitalJournal = () => {
                   opacity: publishing ? 0.6 : 1,
                 }}
               >
-                {publishing ? 'Publishing...' : '📤 Publish'}
+                {publishing ? 'Publishing...' : 'Publish'}
               </button>
             </div>
           </div>

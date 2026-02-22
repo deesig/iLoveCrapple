@@ -247,7 +247,7 @@ export default function ProfilePage() {
 
                         {!profile.isOwn && (
                             <button className="prof-follow-btn">
-                                👤+ Follow
+                                Follow
                             </button>
                         )}
 
@@ -280,7 +280,7 @@ export default function ProfilePage() {
                         {/* ── Pinned Section ─────────────────────────────────── */}
                         <div className="prof-pinned-section">
                             <div className="prof-pinned-header">
-                                <span className="prof-section-label">📌 PINNED</span>
+                                <span className="prof-section-label">PINNED ENTRIES</span>
                                 {editing && pinned.length < 3 && (
                                     <span className="prof-add-pin-hint">Add Pin</span>
                                 )}
@@ -376,6 +376,6 @@ export default function ProfilePage() {
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }
