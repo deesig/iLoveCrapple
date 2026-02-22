@@ -72,8 +72,10 @@ const DigitalJournal = () => {
   const [saveStatus, setSaveStatus] = useState('');
   const saveTimerRef = useRef(null);
   const [userImages, setUserImages] = useState([]);
+  const [sessionAudios, setSessionAudios] = useState([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const fileInputRef = useRef(null);
+  const audioInputRef = useRef(null);
   const [contextMenu, setContextMenu] = useState(null); // { x, y, target }
   const [fmt, setFmt] = useState({
     fontFamily: 'Courier New',
@@ -122,7 +124,7 @@ const DigitalJournal = () => {
     setSaveStatus('Saving...');
     saveTimerRef.current = setTimeout(async () => {
       try {
-        const json = canvas.toJSON(['splitByGrapheme', '_lockedWidth', '_isPageBg']);
+        const json = canvas.toJSON(['splitByGrapheme', '_lockedWidth', '_isPageBg', '_isAudio', 'audioId', '_overlayId']);
         // Filter out the page background rect from saved data
         json.objects = json.objects.filter(o => !o._isPageBg);
         await fetch('/api/canvas', {
@@ -178,11 +180,34 @@ const DigitalJournal = () => {
       await canvas.loadFromJSON(canvasJSON);
 
       // Re-apply our custom overrides to every loaded textbox
+      // And fetch audio URLs for audio placeholders
+      const loadedAudios = [];
       canvas.getObjects().forEach((obj) => {
         if (obj.type === 'textbox') {
           applyTextboxOverrides(obj);
+        } else if (obj._isAudio && obj.audioId) {
+          loadedAudios.push(obj);
         }
       });
+
+      // Fetch base64 audio data for all loaded audio players
+      if (loadedAudios.length > 0) {
+        Promise.all(
+          loadedAudios.map(async (obj) => {
+            try {
+              const r = await fetch(`/api/audio/${obj.audioId}`, { credentials: 'include' });
+              if (!r.ok) return null;
+              const data = await r.json();
+              return { overlayId: obj._overlayId, url: data.audioData };
+            } catch (e) {
+              return null;
+            }
+          })
+        ).then(results => {
+          const valid = results.filter(r => r !== null);
+          setSessionAudios(prev => [...prev, ...valid]);
+        });
+      }
 
       // Restore page rect (loadFromJSON replaces all objects)
       if (activePageObj) {
@@ -266,6 +291,23 @@ const DigitalJournal = () => {
         top: Math.round(target.top / GRID_SIZE) * GRID_SIZE,
       });
     });
+
+    // Sync HTML audio overlays on every render to exactly match Fabric object boundaries
+    const syncAudioOverlays = () => {
+      canvas.getObjects().forEach(o => {
+        if (o._isAudio) {
+          const el = document.getElementById(`audio-container-${o._overlayId}`);
+          if (el) {
+            const rect = o.getBoundingRect();
+            el.style.left = `${rect.left}px`;
+            el.style.top = `${rect.top}px`;
+            el.style.width = `${rect.width}px`;
+            el.style.height = `${rect.height}px`;
+          }
+        }
+      });
+    };
+    canvas.on('after:render', syncAudioOverlays);
 
     // ── Textbox resize: bake scaleX into width, anchor top ──────────────
     canvas.on('before:transform', (options) => {
@@ -463,7 +505,7 @@ const DigitalJournal = () => {
       left: Math.round(left / GRID_SIZE) * GRID_SIZE,
       top: Math.round(top / GRID_SIZE) * GRID_SIZE,
       width: 240,
-      fontFamily: 'Courier New',
+      fontFamily: 'Outfit',
       fontSize: 20,
       fill: '#333',
       lineHeight: 1.3,
@@ -475,6 +517,65 @@ const DigitalJournal = () => {
     fabricCanvas.add(text);
     fabricCanvas.setActiveObject(text);
   }, [fabricCanvas, applyTextboxOverrides]);
+
+  // ── Add Audio ────────────────────────────────────────────────────────────
+  const addAudioToCanvas = useCallback((audioId, dataUrl, x, y) => {
+    if (!fabricCanvas) return;
+    const page = pageRef.current;
+    const pLeft = page ? page.left + 100 : 200;
+    const pTop = page ? page.top + 30 : 100;
+
+    const overlayId = Date.now().toString() + Math.random().toString(36).substr(2, 5);
+
+    const rect = new fabric.Rect({
+      left: x ?? Math.round(pLeft / GRID_SIZE) * GRID_SIZE,
+      top: y ?? Math.round(pTop / GRID_SIZE) * GRID_SIZE,
+      width: 300,
+      height: 54, // standard HTML audio height
+      fill: 'transparent',
+      stroke: 'rgba(0,0,0,0)',
+      rx: 10,
+      ry: 10,
+    });
+
+    rect._isAudio = true;
+    rect.audioId = audioId;
+    rect._overlayId = overlayId;
+    rect.setControlsVisibility({
+      mt: false, mb: false, ml: true, mr: true,
+      tl: false, tr: false, bl: false, br: false
+    });
+
+    fabricCanvas.add(rect);
+    fabricCanvas.setActiveObject(rect);
+    fabricCanvas.requestRenderAll();
+
+    setSessionAudios(prev => [...prev, { overlayId, url: dataUrl }]);
+  }, [fabricCanvas]);
+
+  const handleUploadAudio = useCallback((e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const dataUrl = ev.target.result;
+      try {
+        const res = await fetch('/api/audio', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ audioData: dataUrl, filename: file.name, mimeType: file.type }),
+        });
+        if (!res.ok) throw new Error('Audio upload failed');
+        const data = await res.json();
+        addAudioToCanvas(data.id, dataUrl);
+      } catch (err) {
+        console.error('Audio upload error:', err);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }, [addAudioToCanvas]);
 
   // ── Image helpers ────────────────────────────────────────────────────────
   const generateThumbnail = useCallback((dataUrl, maxSize = 150) => {
@@ -782,6 +883,27 @@ const DigitalJournal = () => {
           onChange={handleUploadImage}
         />
 
+        {/* Upload Audio button — always visible */}
+        <button onClick={() => audioInputRef.current?.click()} style={{
+          cursor: 'pointer',
+          padding: '5px 12px',
+          background: '#7c6aef',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          fontSize: '13px',
+          fontWeight: 'bold',
+        }}>
+          🎵 Add Audio
+        </button>
+        <input
+          ref={audioInputRef}
+          type="file"
+          accept="audio/mp3,audio/mpeg,audio/wav"
+          style={{ display: 'none' }}
+          onChange={handleUploadAudio}
+        />
+
         {/* Formatting controls — only when a textbox is selected */}
         {toolbarVisible && <>
           <div style={divider} />
@@ -863,6 +985,28 @@ const DigitalJournal = () => {
         }}>
           <div style={{ position: 'relative' }}>
             <canvas ref={canvasRef} />
+
+            {/* ── Native HTML overlays for interactive objects like audio ── */}
+            {sessionAudios.map(a => (
+              <div
+                key={a.overlayId}
+                id={`audio-container-${a.overlayId}`}
+                style={{
+                  position: 'absolute',
+                  zIndex: 5,
+                  pointerEvents: 'auto',
+                  // Initial values, overridden live by syncAudioOverlays
+                  left: -9999, top: -9999,
+                }}
+              >
+                <audio
+                  controls
+                  src={a.url}
+                  style={{ width: '100%', height: '100%', outline: 'none' }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                />
+              </div>
+            ))}
           </div>
         </div>
       </div>
