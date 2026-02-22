@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
+import poentryLanding from './assets/iconography/3x/poentryLanding.png';
+import poentryLogo from './assets/iconography/poentrylogo.svg';
+import poentryBG from './assets/iconography/3x/poentryBG.png';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID';
 
@@ -64,25 +67,17 @@ export default function LoginPage() {
 
     return (
         <div className="login-page">
-            {/* Animated background blobs */}
+            
+            <img src={poentryLogo} alt="Poentry Logo" className="main-logo" />
             <div className="login-bg">
-                <div className="blob blob-1" />
-                <div className="blob blob-2" />
-                <div className="blob blob-3" />
+                <img src={poentryBG} alt="Poentry Background" className="login-bg-image" />
+                
             </div>
+            <img src={poentryLanding} alt="Poentry Logo" className="login-logo" />
 
-            <div className="login-card">
-                <div className="login-icon">✍️</div>
-                <h1 className="login-title">Poentry</h1>
-                <p className="login-subtitle">Your Digital Journal</p>
-                <p className="login-description">
-                    A beautiful canvas where your thoughts flow freely.<br />
-                    Create, format, and organize your writing in your own private space.
-                </p>
-                <div className="login-divider" />
-                <div ref={googleBtnRef} className="google-btn-wrapper" />
-                <p className="login-footer">Your data stays private and secure.</p>
-            </div>
+            
+            <div ref={googleBtnRef} className="google-btn-wrapper" />
+                
         </div>
     );
 }

@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
+import poentryBG from './assets/iconography/3x/poentryBG.png';
+import poentryLogo from './assets/iconography/poentrylogo.svg';
+import chooseUser from './assets/3x/chooseUser.png';
+import flowerGrad from './assets/3x/flowerGrad.png';
 
 export default function UsernamePage() {
     const { user, loading, setUsername: saveUsername } = useAuth();
@@ -81,16 +85,19 @@ export default function UsernamePage() {
 
     return (
         <div className="username-page">
-            <div className="login-bg">
-                <div className="blob blob-1" />
-                <div className="blob blob-2" />
-                <div className="blob blob-3" />
+            <img src={poentryLogo} alt="Poentry Logo" className="main-logo" />
+            <img src={poentryBG} alt="Poentry Background" className="login-bg-image" />
+            <div className="flower-box">
+                <img src={chooseUser} alt="Choose Username" className="choose-user-image" />
+                <img src={flowerGrad} alt="Decoration" className="flower-grad-image" />
             </div>
+            
 
             <div className="username-card">
-                <div className="login-icon">👤</div>
+                
                 <h1 className="login-title">Choose a Username</h1>
                 <p className="login-subtitle">This will be your unique identity on Poentry</p>
+                
 
                 <form onSubmit={handleSubmit} className="username-form">
                     <div className="username-input-wrapper">
@@ -120,7 +127,7 @@ export default function UsernamePage() {
                     {error && <p className="username-hint hint-error">{error}</p>}
 
                     <button type="submit" disabled={!canSubmit} className="username-submit">
-                        {submitting ? 'Setting up...' : 'Continue to Journal →'}
+                        {submitting ? 'Setting up...' : 'Continue to Poentry →'}
                     </button>
                 </form>
             </div>
