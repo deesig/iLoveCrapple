@@ -959,9 +959,9 @@ body {
   font-weight: 700;
   letter-spacing: 0.12em;
   color: #999;
-  margin-bottom: 16px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #ddd;
+  margin-top: 26px;
+  padding-top: 16px;
+  border-top: 2px solid #0000002b;
 }
 
 .disc-notes-area {
@@ -1065,11 +1065,12 @@ body {
   pointer-events: auto;
   background: transparent;
   border: none;
-  font-size: 1.8rem;
+  font-size: 3rem;
   color: #0223B6;
   cursor: pointer;
   display: flex;
   align-items: center;
+  padding: 0 4em;
   gap: 8px;
   font-family: var(--font-sans);
   transition: transform 0.1s, color 0.2s;
