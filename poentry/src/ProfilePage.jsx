@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import bookPageSvg from './assets/bookPage.svg';
+import poentryLogo from './assets/iconography/poentrylogo.svg';
 
 export default function ProfilePage() {
     const { username } = useParams();
@@ -187,7 +188,7 @@ export default function ProfilePage() {
 
             {/* ── Header ────────────────────────────────────────────────────────── */}
             <header className="disc-header prof-header-transparent">
-                <h1 className="disc-logo">Poentry</h1>
+                <img src={poentryLogo} alt="Poentry Logo" className="main-logo" />
                 <div className="disc-header-actions">
                     <button className="disc-new-entry-btn" onClick={() => navigate('/journal')}>
                         + New Entry
@@ -330,13 +331,13 @@ export default function ProfilePage() {
                                 className={`prof-tab ${tab === 'pages' ? 'prof-tab-active' : ''}`}
                                 onClick={() => setTab('pages')}
                             >
-                                📄 PAGES
+                                PAGES
                             </button>
                             <button
                                 className={`prof-tab ${tab === 'journals' ? 'prof-tab-active' : ''}`}
                                 onClick={() => setTab('journals')}
                             >
-                                📓 JOURNALS
+                                JOURNALS
                             </button>
                         </div>
 
