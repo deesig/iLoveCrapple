@@ -559,40 +559,31 @@ const DigitalJournal = () => {
   useEffect(() => {
     if (!fabricCanvas) return;
 
-    const handleContextMenu = (opt) => {
-      const e = opt.e;
-      e.preventDefault();
-      e.stopPropagation();
+    const onMouseDown = (opt) => {
+      // Fabric.js v7 passes the native event at opt.e; right-click = e.button === 2
+      if (opt.e?.button === 2) {
+        opt.e.preventDefault();
+        opt.e.stopPropagation();
 
-      const target = fabricCanvas.findTarget(e);
-      if (!target) {
+        const target = opt.target;
+        if (!target) {
+          setContextMenu(null);
+          return;
+        }
+
+        fabricCanvas.setActiveObject(target);
+        fabricCanvas.requestRenderAll();
+        setContextMenu({ x: opt.e.clientX, y: opt.e.clientY, target });
+      } else {
+        // Left or middle click — dismiss menu
         setContextMenu(null);
-        return;
       }
-
-      fabricCanvas.setActiveObject(target);
-      fabricCanvas.requestRenderAll();
-      setContextMenu({ x: e.clientX, y: e.clientY, target });
     };
 
-    fabricCanvas.on('mouse:down', (opt) => {
-      if (opt.e?.button !== 2) {
-        setContextMenu(null);
-      }
-    });
-    fabricCanvas.on('mouse:down:before', (opt) => {
-      if (opt.e?.button === 2) {
-        handleContextMenu(opt);
-      }
-    });
-
-    // Suppress native context menu on the canvas
-    const canvasEl = fabricCanvas.upperCanvasEl;
-    const suppress = (e) => e.preventDefault();
-    canvasEl.addEventListener('contextmenu', suppress);
+    fabricCanvas.on('mouse:down', onMouseDown);
 
     return () => {
-      canvasEl.removeEventListener('contextmenu', suppress);
+      fabricCanvas.off('mouse:down', onMouseDown);
     };
   }, [fabricCanvas]);
 
