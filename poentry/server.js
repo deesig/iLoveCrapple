@@ -23,6 +23,7 @@ db.exec(`
     username     TEXT UNIQUE,
     display_name TEXT,
     avatar_url   TEXT,
+    bio          TEXT DEFAULT '',
     created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -88,7 +89,20 @@ db.exec(`
     user_id  INTEGER NOT NULL REFERENCES users(id),
     UNIQUE(entry_id, user_id)
   );
+
+  CREATE TABLE IF NOT EXISTS pinned_entries (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id  INTEGER NOT NULL REFERENCES users(id),
+    entry_id INTEGER NOT NULL REFERENCES published_entries(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(user_id, entry_id)
+  );
 `);
+
+// Add bio column if it doesn't exist (safe migration)
+try { db.exec('ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ""'); } catch (e) { /* already exists */ }
+try { db.exec('ALTER TABLE users ADD COLUMN banner_url TEXT DEFAULT ""'); } catch (e) { /* already exists */ }
+try { db.exec('ALTER TABLE users ADD COLUMN custom_avatar TEXT DEFAULT ""'); } catch (e) { /* already exists */ }
 
 // ── Prepared statements ────────────────────────────────────────────────────────
 const stmts = {
@@ -133,7 +147,7 @@ const stmts = {
         'INSERT INTO published_entries (user_id, title, description, thumbnail, canvas_json, visibility) VALUES (?, ?, ?, ?, ?, ?)'
     ),
     getPublicEntries: db.prepare(`
-        SELECT pe.*, u.username, u.display_name, u.avatar_url,
+        SELECT pe.*, u.username, u.display_name, u.avatar_url, u.custom_avatar,
                (SELECT COUNT(*) FROM entry_likes WHERE entry_id = pe.id) AS like_count,
                (SELECT COUNT(*) FROM entry_comments WHERE entry_id = pe.id) AS comment_count
         FROM published_entries pe
@@ -143,7 +157,7 @@ const stmts = {
         LIMIT ? OFFSET ?
     `),
     getEntryById: db.prepare(`
-        SELECT pe.*, u.username, u.display_name, u.avatar_url,
+        SELECT pe.*, u.username, u.display_name, u.avatar_url, u.custom_avatar,
                (SELECT COUNT(*) FROM entry_likes WHERE entry_id = pe.id) AS like_count,
                (SELECT COUNT(*) FROM entry_comments WHERE entry_id = pe.id) AS comment_count
         FROM published_entries pe
@@ -151,7 +165,7 @@ const stmts = {
         WHERE pe.id = ?
     `),
     getEntryComments: db.prepare(`
-        SELECT ec.*, u.username, u.display_name, u.avatar_url
+        SELECT ec.*, u.username, u.display_name, u.avatar_url, u.custom_avatar
         FROM entry_comments ec
         JOIN users u ON ec.user_id = u.id
         WHERE ec.entry_id = ?
@@ -166,6 +180,39 @@ const stmts = {
     findBookmark: db.prepare('SELECT id FROM entry_bookmarks WHERE entry_id = ? AND user_id = ?'),
     insertBookmark: db.prepare('INSERT INTO entry_bookmarks (entry_id, user_id) VALUES (?, ?)'),
     deleteBookmark: db.prepare('DELETE FROM entry_bookmarks WHERE entry_id = ? AND user_id = ?'),
+
+    // Profile statements
+    getProfileByUsername: db.prepare('SELECT id, username, display_name, avatar_url, bio, banner_url, custom_avatar, created_at FROM users WHERE username = ?'),
+    getUserEntries: db.prepare(`
+        SELECT pe.id, pe.title, pe.description, pe.thumbnail, pe.visibility, pe.created_at,
+               (SELECT COUNT(*) FROM entry_likes WHERE entry_id = pe.id) AS like_count,
+               (SELECT COUNT(*) FROM entry_comments WHERE entry_id = pe.id) AS comment_count
+        FROM published_entries pe
+        WHERE pe.user_id = ?
+        ORDER BY pe.created_at DESC
+    `),
+    getUserPublicEntries: db.prepare(`
+        SELECT pe.id, pe.title, pe.description, pe.thumbnail, pe.visibility, pe.created_at,
+               (SELECT COUNT(*) FROM entry_likes WHERE entry_id = pe.id) AS like_count,
+               (SELECT COUNT(*) FROM entry_comments WHERE entry_id = pe.id) AS comment_count
+        FROM published_entries pe
+        WHERE pe.user_id = ? AND pe.visibility = 'public'
+        ORDER BY pe.created_at DESC
+    `),
+    getPinnedEntries: db.prepare(`
+        SELECT pin.position, pe.id, pe.title, pe.thumbnail, pe.created_at
+        FROM pinned_entries pin
+        JOIN published_entries pe ON pin.entry_id = pe.id
+        WHERE pin.user_id = ?
+        ORDER BY pin.position ASC
+    `),
+    getPinnedCount: db.prepare('SELECT COUNT(*) as cnt FROM pinned_entries WHERE user_id = ?'),
+    findPin: db.prepare('SELECT id FROM pinned_entries WHERE user_id = ? AND entry_id = ?'),
+    insertPin: db.prepare('INSERT INTO pinned_entries (user_id, entry_id, position) VALUES (?, ?, ?)'),
+    deletePin: db.prepare('DELETE FROM pinned_entries WHERE user_id = ? AND entry_id = ?'),
+    updateBio: db.prepare('UPDATE users SET bio = ? WHERE id = ?'),
+    updateBanner: db.prepare('UPDATE users SET banner_url = ? WHERE id = ?'),
+    updateCustomAvatar: db.prepare('UPDATE users SET custom_avatar = ? WHERE id = ?'),
 };
 
 // ── Express app ────────────────────────────────────────────────────────────────
@@ -227,7 +274,7 @@ app.post('/api/auth/google', async (req, res) => {
             id: user.id,
             username: user.username,
             displayName: user.display_name,
-            avatarUrl: user.avatar_url,
+            avatarUrl: user.custom_avatar || user.avatar_url,
         });
     } catch (err) {
         console.error('Google auth error:', err);
@@ -242,7 +289,7 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
         id: user.id,
         username: user.username,
         displayName: user.display_name,
-        avatarUrl: user.avatar_url,
+        avatarUrl: user.custom_avatar || user.avatar_url,
     });
 });
 
@@ -424,7 +471,7 @@ app.get('/api/entries', requireAuth, (req, res) => {
             createdAt: e.created_at,
             username: e.username,
             displayName: e.display_name,
-            avatarUrl: e.avatar_url,
+            avatarUrl: e.custom_avatar || e.avatar_url,
             likeCount: e.like_count,
             commentCount: e.comment_count,
             liked: !!stmts.findLike.get(e.id, req.session.userId),
@@ -452,7 +499,7 @@ app.get('/api/entries/:id', requireAuth, (req, res) => {
         createdAt: entry.created_at,
         username: entry.username,
         displayName: entry.display_name,
-        avatarUrl: entry.avatar_url,
+        avatarUrl: entry.custom_avatar || entry.avatar_url,
         likeCount: entry.like_count,
         commentCount: entry.comment_count,
         liked: !!stmts.findLike.get(entry.id, req.session.userId),
@@ -473,7 +520,7 @@ app.get('/api/entries/:id/comments', requireAuth, (req, res) => {
             createdAt: c.created_at,
             username: c.username,
             displayName: c.display_name,
-            avatarUrl: c.avatar_url,
+            avatarUrl: c.custom_avatar || c.avatar_url,
         })),
     });
 });
@@ -543,6 +590,86 @@ app.post('/api/entries/:id/bookmark', requireAuth, (req, res) => {
             res.json({ bookmarked: false });
         }
     }
+});
+
+// ── Profile ───────────────────────────────────────────────────────────────────
+app.get('/api/profile/:username', (req, res) => {
+    const profile = stmts.getProfileByUsername.get(req.params.username);
+    if (!profile) return res.status(404).json({ error: 'User not found' });
+
+    const isOwn = req.session?.userId === profile.id;
+
+    // Get entries (all if own profile, only public otherwise)
+    const entries = isOwn
+        ? stmts.getUserEntries.all(profile.id)
+        : stmts.getUserPublicEntries.all(profile.id);
+
+    // Get pinned entries
+    const pinned = stmts.getPinnedEntries.all(profile.id);
+
+    res.json({
+        profile: {
+            ...profile,
+            isOwn,
+            entryCount: entries.length,
+        },
+        entries: entries.map(e => ({
+            ...e,
+            createdAt: e.created_at,
+            likeCount: e.like_count,
+            commentCount: e.comment_count,
+        })),
+        pinned: pinned.map(p => ({
+            ...p,
+            createdAt: p.created_at,
+        })),
+    });
+});
+
+app.post('/api/profile/pin/:entryId', requireAuth, (req, res) => {
+    const entryId = parseInt(req.params.entryId);
+    const userId = req.session.userId;
+
+    // Check if already pinned
+    const existing = stmts.findPin.get(userId, entryId);
+    if (existing) return res.status(400).json({ error: 'Already pinned' });
+
+    // Check pin count (max 3)
+    const { cnt } = stmts.getPinnedCount.get(userId);
+    if (cnt >= 3) return res.status(400).json({ error: 'Maximum 3 pinned entries' });
+
+    // Get next position
+    const position = cnt;
+    stmts.insertPin.run(userId, entryId, position);
+    res.json({ ok: true, position });
+});
+
+app.delete('/api/profile/pin/:entryId', requireAuth, (req, res) => {
+    const entryId = parseInt(req.params.entryId);
+    const result = stmts.deletePin.run(req.session.userId, entryId);
+    if (result.changes === 0) return res.status(404).json({ error: 'Pin not found' });
+    res.json({ ok: true });
+});
+
+app.put('/api/profile/bio', requireAuth, (req, res) => {
+    const { bio } = req.body;
+    if (typeof bio !== 'string') return res.status(400).json({ error: 'Invalid bio' });
+    stmts.updateBio.run(bio.slice(0, 500), req.session.userId);
+    res.json({ ok: true });
+});
+
+app.put('/api/profile/banner', requireAuth, (req, res) => {
+    const { bannerUrl } = req.body;
+    if (typeof bannerUrl !== 'string') return res.status(400).json({ error: 'Invalid banner' });
+    stmts.updateBanner.run(bannerUrl, req.session.userId);
+    res.json({ ok: true });
+});
+
+app.put('/api/profile/avatar', requireAuth, (req, res) => {
+    const { avatarUrl } = req.body;
+    if (typeof avatarUrl !== 'string') return res.status(400).json({ error: 'Invalid avatar' });
+    stmts.updateCustomAvatar.run(avatarUrl, req.session.userId);
+    res.json({ ok: true });
 });
 
 // ── Start ──────────────────────────────────────────────────────────────────────

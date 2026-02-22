@@ -139,7 +139,7 @@ export default function DiscoveryPage() {
                     <button className="disc-new-entry-btn" onClick={() => navigate('/journal')}>
                         + New Entry
                     </button>
-                    <div className="disc-user-pill">
+                    <div className="disc-user-pill" onClick={() => navigate(`/profile/${user?.username}`)} style={{ cursor: 'pointer' }}>
                         {user?.avatarUrl && (
                             <img src={user.avatarUrl} alt="" className="disc-avatar" />
                         )}
@@ -221,7 +221,7 @@ export default function DiscoveryPage() {
                             <h2 className="disc-title">{displayEntry.title}</h2>
                             <div className="disc-meta">
                                 <span className="disc-date">{fmtDate(displayEntry.createdAt)}</span>
-                                <span className="disc-author">{displayEntry.username || displayEntry.displayName}</span>
+                                <span className="disc-author" onClick={() => navigate(`/profile/${displayEntry.username}`)} style={{ cursor: 'pointer' }}>{displayEntry.username || displayEntry.displayName}</span>
                             </div>
                             <p className="disc-description">
                                 {displayEntry.description || 'No description provided.'}
