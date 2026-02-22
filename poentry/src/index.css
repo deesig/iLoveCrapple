@@ -11,11 +11,11 @@
 
 :root {
   --font-sans: 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --color-bg: #0f0f1a;
+  --color-bg: #EEEEEE;
   --color-surface: rgba(255, 255, 255, 0.06);
   --color-surface-hover: rgba(255, 255, 255, 0.1);
   --color-border: rgba(255, 255, 255, 0.1);
-  --color-text: #e8e8f0;
+  --color-text: #090977;
   --color-text-muted: #8888a0;
   --color-primary: #7c6aef;
   --color-primary-glow: rgba(124, 106, 239, 0.35);
@@ -78,69 +78,24 @@ body {
   }
 }
 
-/* ── Animated Background Blobs ─────────────────────────────────────────────── */
+
 .login-bg {
   position: fixed;
   inset: 0;
   overflow: hidden;
+  background-color: #eeedf4;
   z-index: 0;
   pointer-events: none;
 }
 
-.blob {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(100px);
-  opacity: 0.5;
-  animation: float 20s ease-in-out infinite;
+.login-logo {
+  position: relative;
+  z-index: 1;
+  width: 70%;
+  height: auto;
+  overflow: hidden;
 }
 
-.blob-1 {
-  width: 500px;
-  height: 500px;
-  background: var(--color-primary);
-  top: -15%;
-  left: -10%;
-  animation-delay: 0s;
-}
-
-.blob-2 {
-  width: 400px;
-  height: 400px;
-  background: var(--color-accent);
-  bottom: -10%;
-  right: -5%;
-  animation-delay: -7s;
-}
-
-.blob-3 {
-  width: 350px;
-  height: 350px;
-  background: #6a9fef;
-  top: 40%;
-  left: 55%;
-  animation-delay: -14s;
-}
-
-@keyframes float {
-
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-
-  25% {
-    transform: translate(40px, -30px) scale(1.05);
-  }
-
-  50% {
-    transform: translate(-20px, 50px) scale(0.95);
-  }
-
-  75% {
-    transform: translate(30px, 20px) scale(1.03);
-  }
-}
 
 /* ── Login Page ────────────────────────────────────────────────────────────── */
 .login-page,
@@ -151,107 +106,56 @@ body {
   min-height: 100vh;
   position: relative;
   z-index: 1;
-  padding: 24px;
+  overflow: hidden;
+  
 }
 
-.login-card,
-.username-card {
-  background: rgba(20, 20, 35, 0.85);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: 48px 40px;
-  max-width: 420px;
-  width: 100%;
-  text-align: center;
-  box-shadow: var(--shadow-card);
-  animation: cardIn 0.6s ease-out;
-}
-
-@keyframes cardIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px) scale(0.97);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.login-icon {
-  font-size: 48px;
-  margin-bottom: 8px;
-  animation: iconBounce 2s ease-in-out infinite;
-}
-
-@keyframes iconBounce {
-
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-6px);
-  }
-}
-
-.login-title {
-  font-size: 2.2rem;
-  font-weight: 800;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin-bottom: 4px;
-  letter-spacing: -0.02em;
-}
-
-.login-subtitle {
-  font-size: 1rem;
-  color: var(--color-text-muted);
-  font-weight: 400;
-  margin-bottom: 20px;
-}
-
-.login-description {
-  font-size: 0.9rem;
-  color: var(--color-text-muted);
-  line-height: 1.6;
-  margin-bottom: 24px;
-}
-
-.login-divider {
-  width: 60px;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--color-primary), transparent);
-  margin: 0 auto 28px;
+.main-logo {
+  position: absolute;
+  top: 7%;
+  left: 7%;
+  transform: translate(-50%, -50%);
+  width: 150px;
+  height: auto;
+  z-index: 2;
 }
 
 .google-btn-wrapper {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 20px;
+    position: absolute;
+    top: 55%;
+    left: 55%;
+    transform: translate(-40%, -50%);
+    z-index: 9999;
 }
 
-.login-footer {
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-  opacity: 0.7;
+.login-bg-image {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 120%;
+    height: auto;
+    opacity: 0.8;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.3;
+    overflow: hidden;
 }
+
+
 
 /* ── Username Page ─────────────────────────────────────────────────────────── */
 .username-form {
+  position: relative;
+  z-index: 4;
   margin-top: 24px;
 }
 
 .username-input-wrapper {
   display: flex;
+  z-index: 4;
   align-items: center;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 0 16px;
@@ -270,6 +174,13 @@ body {
   margin-right: 4px;
 }
 
+.login-title {
+  font-size: 1.8rem;
+  font-family: 'Averia Serif Libre';
+  font-weight: 500;
+  color: #000000;
+}
+
 .username-input {
   flex: 1;
   background: transparent;
@@ -280,10 +191,11 @@ body {
   font-family: var(--font-sans);
   padding: 14px 0;
   letter-spacing: 0.02em;
+  z-index: 5;
 }
 
 .username-input::placeholder {
-  color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255);
 }
 
 .username-status {
@@ -313,9 +225,10 @@ body {
   padding: 14px;
   border: none;
   border-radius: var(--radius-md);
-  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
-  color: #fff;
+  background: #0223B6;
+  color: #ffffff;
   font-size: 1rem;
+  z-index: 5;
   font-weight: 600;
   font-family: var(--font-sans);
   cursor: pointer;
@@ -323,7 +236,6 @@ body {
 }
 
 .username-submit:hover:not(:disabled) {
-  opacity: 0.9;
   transform: translateY(-1px);
 }
 
@@ -332,8 +244,41 @@ body {
 }
 
 .username-submit:disabled {
-  opacity: 0.4;
+  background: #a3b0e587;
+  color: #d8d8e899;
   cursor: not-allowed;
+}
+
+.flower-box {
+  position: absolute;
+  top: 0;
+  left: 35%;
+  width: 30%;
+  height: 100vh;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.flower-grad-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+}
+
+.choose-user-image {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 500px;
+  margin-top: 80px;
+  object-fit: contain;
 }
 
 /* ── Journal Header Bar ────────────────────────────────────────────────────── */
